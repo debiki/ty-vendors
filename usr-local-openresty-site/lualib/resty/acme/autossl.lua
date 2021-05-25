@@ -230,9 +230,23 @@ end
 function AUTOSSL.check_renew()
   local now = ngx.now()
   local interval = AUTOSSL.config.renew_check_interval
+
+  log(ngx_INFO, "AUTOSSL.check_renew(): When is the time? Now: ", now,
+        ", interval: ", interval,
+        ", ngx.worker.count(): ", ngx.worker.count(),
+        ", id(): ", ngx.worker.id())
+  log(ngx_INFO, "(now - now % interval): ",
+                 (now - now % interval))
+  log(ngx_INFO, "(now - now % interval) / interval): ",
+                 (now - now % interval) / interval)
+  log(ngx_INFO, "((now - now % interval) / interval) % ngx.worker.count(): ",
+                 ((now - now % interval) / interval) % ngx.worker.count())
+
   if ((now - now % interval) / interval) % ngx.worker.count() ~= ngx.worker.id() then
+    log(ngx_INFO, "AUTOSSL.check_renew(): Now is not the time.")
     return
   end
+  log(ngx_INFO, "AUTOSSL.check_renew(): Doing now ...")
 
   local keys = AUTOSSL.storage:list(domain_cache_key_prefix)
   for _, key in ipairs(keys) do
@@ -268,6 +282,8 @@ function AUTOSSL.check_renew()
 
 ::continue::
   end
+
+  log(ngx_INFO, "AUTOSSL.check_renew(): ... Done.")
 end
 
 function AUTOSSL.init(autossl_config, acme_config)
@@ -368,6 +384,9 @@ function AUTOSSL.init_worker()
       error("failed to set account key: " .. err)
     end
   end
+
+  log(ngx_INFO, "Scheduling AUTOSSL.check_renew every ",
+          AUTOSSL.config.renew_check_interval, " seconds")
 
   ngx.timer.every(AUTOSSL.config.renew_check_interval, AUTOSSL.check_renew)
 end
