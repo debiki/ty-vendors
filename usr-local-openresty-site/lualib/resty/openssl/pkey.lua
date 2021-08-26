@@ -20,13 +20,13 @@ local dh_lib = require "resty.openssl.dh"
 local ec_lib = require "resty.openssl.ec"
 local ecx_lib = require "resty.openssl.ecx"
 local objects_lib = require "resty.openssl.objects"
-local jwk_lib = require "resty.openssl.aux.jwk"
-local ctypes = require "resty.openssl.aux.ctypes"
+local jwk_lib = require "resty.openssl.auxiliary.jwk"
+local ctypes = require "resty.openssl.auxiliary.ctypes"
 local format_error = require("resty.openssl.err").format_error
 
 local OPENSSL_11_OR_LATER = require("resty.openssl.version").OPENSSL_11_OR_LATER
 local OPENSSL_111_OR_LATER = require("resty.openssl.version").OPENSSL_111_OR_LATER
-local OPENSSL_30 = require("resty.openssl.version").OPENSSL_30
+local BORINGSSL = require("resty.openssl.version").BORINGSSL
 
 local ptr_of_uint = ctypes.ptr_of_uint
 local ptr_of_size_t = ctypes.ptr_of_size_t
@@ -80,7 +80,8 @@ local function load_pem_der(txt, opts, funcs)
         return nil, "BIO_ctrl() failed"
       end
 
-      if fmt == "PEM" or fmt == "*" then
+      -- only pass in passphrase/passphrase_cb to PEM_* functions
+      if fmt == "PEM" or (fmt == "*" and arg == load_pem_args) then
         if opts.passphrase then
           local passphrase = opts.passphrase
           if type(passphrase) ~= "string" then
@@ -88,7 +89,7 @@ local function load_pem_der(txt, opts, funcs)
           end
           arg = { null, nil, passphrase }
         elseif opts.passphrase_cb then
-          passphrase_cb = ffi_cast("pem_password_cb*", function(buf, size)
+          passphrase_cb = passphrase_cb or ffi_cast("pem_password_cb", function(buf, size)
             local p = opts.passphrase_cb()
             local len = #p -- 1 byte for \0
             if len > size then
@@ -162,23 +163,16 @@ local function generate_param(key_type, config)
     if nid == 0 then
       return nil, "unknown curve " .. curve
     end
-    -- EVP_PKEY_CTX_set_ec_paramgen_curve_nid
-    if C.EVP_PKEY_CTX_ctrl(pctx,
-            evp_macro.EVP_PKEY_EC,
-            evp_macro.EVP_PKEY_OP_PARAMGEN + evp_macro.EVP_PKEY_OP_KEYGEN,
-            evp_macro.EVP_PKEY_CTRL_EC_PARAMGEN_CURVE_NID,
-            nid, nil) <= 0 then
+    if evp_macro.EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, nid) <= 0 then
       return nil, format_error("EVP_PKEY_CTX_ctrl: EC: curve_nid")
     end
-    -- use the named-curve encoding for best backward-compatibilty
-    -- and for playing well with go:crypto/x509
-    -- # define OPENSSL_EC_NAMED_CURVE  0x001
-    if C.EVP_PKEY_CTX_ctrl(pctx,
-            evp_macro.EVP_PKEY_EC,
-            evp_macro.EVP_PKEY_OP_PARAMGEN + evp_macro.EVP_PKEY_OP_KEYGEN,
-            evp_macro.EVP_PKEY_CTRL_EC_PARAM_ENC,
-            1, nil) <= 0 then
-      return nil, format_error("EVP_PKEY_CTX_ctrl: EC: param_enc")
+    if not BORINGSSL then
+      -- use the named-curve encoding for best backward-compatibilty
+      -- and for playing well with go:crypto/x509
+      -- # define OPENSSL_EC_NAMED_CURVE  0x001
+      if evp_macro.EVP_PKEY_CTX_set_ec_param_enc(pctx, 1) <= 0 then
+        return nil, format_error("EVP_PKEY_CTX_ctrl: EC: param_enc")
+      end
     end
   elseif key_type == evp_macro.EVP_PKEY_DH then
     local bits = config.bits
@@ -302,11 +296,7 @@ local function generate_key(config)
       return nil, "bits out of range"
     end
 
-    -- EVP_PKEY_CTX_set_rsa_keygen_bits
-    if C.EVP_PKEY_CTX_ctrl(pctx,
-              evp_macro.EVP_PKEY_RSA, evp_macro.EVP_PKEY_OP_KEYGEN,
-              evp_macro.EVP_PKEY_CTRL_RSA_KEYGEN_BITS,
-              bits, nil) <= 0 then
+    if evp_macro.EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, bits) <= 0 then
       return nil, format_error("EVP_PKEY_CTX_ctrl: RSA: bits")
     end
 
@@ -317,11 +307,8 @@ local function generate_key(config)
         return nil, "BN_new() failed"
       end
       C.BN_set_word(exp, config.exp)
-      -- EVP_PKEY_CTX_set_rsa_keygen_pubexp
-      if C.EVP_PKEY_CTX_ctrl(pctx,
-                evp_macro.EVP_PKEY_RSA, evp_macro.EVP_PKEY_OP_KEYGEN,
-                evp_macro.EVP_PKEY_CTRL_RSA_KEYGEN_PUBEXP,
-                0, exp) <= 0 then
+
+      if evp_macro.EVP_PKEY_CTX_set_rsa_keygen_pubexp(pctx, exp) <= 0 then
         return nil, format_error("EVP_PKEY_CTX_ctrl: RSA: exp")
       end
     end
@@ -334,56 +321,56 @@ local function generate_key(config)
   return ctx_ptr[0]
 end
 
-local _load_key_try_funcs = {
-  PEM = {
-    -- Note: make sure we always try load priv key first
-    pr = {
-      ['PEM_read_bio_PrivateKey'] = load_pem_args,
+local load_key_try_funcs = {} do
+  local _load_key_try_funcs = {
+    PEM = {
+      -- Note: make sure we always try load priv key first
+      pr = {
+        ['PEM_read_bio_PrivateKey'] = load_pem_args,
+      },
+      pu = {
+        ['PEM_read_bio_PUBKEY'] = load_pem_args,
+      },
     },
-    pu = {
-      ['PEM_read_bio_PUBKEY'] = load_pem_args,
+    DER = {
+      pr = {
+        ['d2i_PrivateKey_bio'] = load_der_args,
+      },
+      pu = {
+        ['d2i_PUBKEY_bio'] = load_der_args,
+      },
     },
-  },
-  DER = {
-    pr = {
-      ['d2i_PrivateKey_bio'] = load_der_args,
-    },
-    pu = {
-      ['d2i_PUBKEY_bio'] = load_der_args,
-    },
-  },
-  JWK = {
-    pr = {
-      ['load_jwk'] = {},
-    },
+    JWK = {
+      pr = {
+        ['load_jwk'] = {},
+      },
+    }
   }
-}
--- populate * funcs
-local all_funcs = {}
-local typ_funcs = {}
-local load_key_try_funcs = {}
-for fmt, ffs in pairs(_load_key_try_funcs) do
-  load_key_try_funcs[fmt] = ffs
+  -- populate * funcs
+  local all_funcs = {}
+  local typ_funcs = {}
+  for fmt, ffs in pairs(_load_key_try_funcs) do
+    load_key_try_funcs[fmt] = ffs
 
-  local funcs = {}
-  for typ, fs in pairs(ffs) do
-    for f, arg in pairs(fs) do
-      funcs[f] = arg
-      all_funcs[f] = arg
-      if not typ_funcs[typ] then
-        typ_funcs[typ] = {}
+    local funcs = {}
+    for typ, fs in pairs(ffs) do
+      for f, arg in pairs(fs) do
+        funcs[f] = arg
+        all_funcs[f] = arg
+        if not typ_funcs[typ] then
+          typ_funcs[typ] = {}
+        end
+        typ_funcs[typ] = arg
       end
-      typ_funcs[typ] = arg
     end
+    load_key_try_funcs[fmt]["*"] = funcs
   end
-  load_key_try_funcs[fmt]["*"] = funcs
+  load_key_try_funcs["*"] = {}
+  load_key_try_funcs["*"]["*"] = all_funcs
+  for typ, fs in pairs(typ_funcs) do
+    load_key_try_funcs[typ] = fs
+  end
 end
-load_key_try_funcs["*"] = {}
-load_key_try_funcs["*"]["*"] = all_funcs
-for typ, fs in pairs(typ_funcs) do
-  load_key_try_funcs[typ] = fs
-end
-_load_key_try_funcs = nil
 
 local function tostring(self, is_priv, fmt)
   if fmt == "JWK" then
@@ -608,16 +595,8 @@ local function asymmetric_routine(self, s, op, padding)
 
   -- EVP_PKEY_CTX_ctrl must be called after *_init
   if self.key_type == evp_macro.EVP_PKEY_RSA and padding then
-    local code
-    if OPENSSL_30 then
-      code = C.EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, padding)
-    else
-      code = C.EVP_PKEY_CTX_ctrl(pkey_ctx, evp_macro.EVP_PKEY_RSA, -1,
-                          evp_macro.EVP_PKEY_CTRL_RSA_PADDING,
-                          padding, nil)
-    end
-    if code ~= 1 then
-      return nil, format_error("pkey:asymmetric_routine EVP_PKEY_CTX_ctrl")
+    if evp_macro.EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, padding) ~= 1 then
+      return nil, format_error("pkey:asymmetric_routine EVP_PKEY_CTX_set_rsa_padding")
     end
     self.rsa_padding = padding
   end
@@ -649,7 +628,56 @@ function _M:verify_recover(s, padding)
   return asymmetric_routine(self, s, ASYMMETRIC_OP_VERIFY_RECOVER, padding)
 end
 
-function _M:sign(digest)
+local evp_pkey_ctx_ptr_ptr_ct = ffi.typeof('EVP_PKEY_CTX*[1]')
+
+local function sign_verify_prepare(self, fint, md_alg, padding, opts)
+  local pkey_ctx
+
+  if self.key_type == evp_macro.EVP_PKEY_RSA and padding then
+    pkey_ctx = C.EVP_PKEY_CTX_new(self.ctx, nil)
+    if pkey_ctx == nil then
+      return nil, format_error("pkey:sign_verify_prepare EVP_PKEY_CTX_new()")
+    end
+    ffi_gc(pkey_ctx, C.EVP_PKEY_CTX_free)
+  end
+
+  local md_ctx = C.EVP_MD_CTX_new()
+  if md_ctx == nil then
+    return nil, "pkey:sign_verify_prepare: EVP_MD_CTX_new() failed"
+  end
+  ffi_gc(md_ctx, C.EVP_MD_CTX_free)
+
+  local dtyp
+  if md_alg then
+    dtyp = C.EVP_get_digestbyname(md_alg)
+    if dtyp == nil then
+      return nil, string.format("pkey:sign_verify_prepare: invalid digest type \"%s\"", md_alg)
+    end
+  end
+
+  local ppkey_ctx = evp_pkey_ctx_ptr_ptr_ct()
+  ppkey_ctx[0] = pkey_ctx
+  if fint(md_ctx, ppkey_ctx, dtyp, nil, self.ctx) ~= 1 then
+    return nil, format_error("pkey:sign_verify_prepare: Init failed")
+  end
+
+  if self.key_type == evp_macro.EVP_PKEY_RSA then
+    if padding then
+      if evp_macro.EVP_PKEY_CTX_set_rsa_padding(ppkey_ctx[0], padding) ~= 1 then
+        return nil, format_error("pkey:sign_verify_prepare EVP_PKEY_CTX_set_rsa_padding")
+      end
+    end
+    if opts and opts.pss_saltlen and padding ~= rsa_macro.paddings.RSA_PKCS1_PSS_PADDING then
+      if evp_macro.EVP_PKEY_CTX_set_rsa_pss_saltlen(ppkey_ctx[0], opts.pss_saltlen) ~= 1 then
+        return nil, format_error("pkey:sign_verify_prepare EVP_PKEY_CTX_set_rsa_pss_saltlen")
+      end
+    end
+  end
+
+  return md_ctx
+end
+
+function _M:sign(digest, md_alg, padding, opts)
   if digest_lib.istype(digest) then
     local length = ptr_of_uint()
     if C.EVP_SignFinal(digest.ctx, self.buf, length, self.ctx) ~= 1 then
@@ -660,17 +688,14 @@ function _M:sign(digest)
     if not OPENSSL_111_OR_LATER then
       -- we can still support earilier version with *Update and *Final
       -- but we choose to not relying on the legacy interface for simplicity
-      return nil, "pkey:sign: one shot sign only available in OpenSSL 1.1 or later"
+      return nil, "pkey:sign: new-style sign only available in OpenSSL 1.1 or later"
     end
-    -- one shot signing
-    local md_ctx = C.EVP_MD_CTX_new()
-    if md_ctx == nil then
-      return nil, "pkey:sign: EVP_MD_CTX_new() failed"
+
+    local md_ctx, err = sign_verify_prepare(self, C.EVP_DigestSignInit, md_alg, padding, opts)
+    if err then
+      return nil, err
     end
-    ffi_gc(md_ctx, C.EVP_MD_CTX_free)
-    if C.EVP_DigestSignInit(md_ctx, nil, nil, nil, self.ctx) ~= 1 then
-      return nil, format_error("pkey:sign: EVP_DigestSignInit")
-    end
+
     local length = ptr_of_size_t(self.buf_size)
     if C.EVP_DigestSign(md_ctx, self.buf, length, digest, #digest) ~= 1 then
       return nil, format_error("pkey:sign: EVP_DigestSign")
@@ -681,32 +706,26 @@ function _M:sign(digest)
   end
 end
 
-function _M:verify(signature, digest)
+function _M:verify(signature, digest, md_alg, padding, opts)
+  if type(signature) ~= "string" then
+    return nil, "pkey:verify: expect a string at #1"
+  end
+
   local code
   if digest_lib.istype(digest) then
-    if not digest_lib.istype(digest) then
-      return nil, "pkey:verify: expect a digest instance at #2"
-    end
     code = C.EVP_VerifyFinal(digest.ctx, signature, #signature, self.ctx)
   elseif type(digest) == "string" then
     if not OPENSSL_111_OR_LATER then
       -- we can still support earilier version with *Update and *Final
       -- but we choose to not relying on the legacy interface for simplicity
-      return nil, "pkey:verify: one shot verify only available in OpenSSL 1.1 or later"
+      return nil, "pkey:verify: new-style verify only available in OpenSSL 1.1 or later"
     end
-    -- one shot verification
-    if type(digest) ~= "string" then
-      return nil, "pkey:verify expect a string at #2"
-    end
-    local md_ctx = C.EVP_MD_CTX_new()
-    if md_ctx == nil then
-      return nil, "pkey:verify: EVP_MD_CTX_new() failed"
-    end
-    ffi_gc(md_ctx, C.EVP_MD_CTX_free)
 
-    if C.EVP_DigestVerifyInit(md_ctx, nil, nil, nil, self.ctx) ~= 1 then
-      return nil, format_error("pkey:verify: EVP_DigestVerifyInit")
+    local md_ctx, err = sign_verify_prepare(self, C.EVP_DigestVerifyInit, md_alg, padding, opts)
+    if err then
+      return nil, err
     end
+
     code = C.EVP_DigestVerify(md_ctx, signature, #signature, digest, #digest)
   else
     return nil, "pkey:verify: expect a digest instance or a string at #2"

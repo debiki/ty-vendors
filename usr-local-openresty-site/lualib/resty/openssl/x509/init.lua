@@ -16,7 +16,7 @@ local extension_lib = require("resty.openssl.x509.extension")
 local pkey_lib = require("resty.openssl.pkey")
 local util = require "resty.openssl.util"
 local txtnid2nid = require("resty.openssl.objects").txtnid2nid
-local ctypes = require "resty.openssl.aux.ctypes"
+local ctypes = require "resty.openssl.auxiliary.ctypes"
 local format_error = require("resty.openssl.err").format_error
 local OPENSSL_10 = require("resty.openssl.version").OPENSSL_10
 local OPENSSL_11_OR_LATER = require("resty.openssl.version").OPENSSL_11_OR_LATER
@@ -110,7 +110,7 @@ function _M.new(cert, fmt)
     end
 
     fmt = fmt or "*"
-    while true do
+    while true do -- luacheck: ignore 512 -- loop is executed at most once
       if fmt == "PEM" or fmt == "*" then
         ctx = C.PEM_read_bio_X509(bio, nil, nil, nil)
         if ctx ~= nil then

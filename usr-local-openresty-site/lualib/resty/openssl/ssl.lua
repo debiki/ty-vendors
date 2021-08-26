@@ -5,7 +5,7 @@ local ffi_cast = ffi.cast
 
 require "resty.openssl.include.ssl"
 
-local nginx_aux = require("resty.openssl.aux.nginx")
+local nginx_aux = require("resty.openssl.auxiliary.nginx")
 local x509_lib = require("resty.openssl.x509")
 local chain_lib = require("resty.openssl.x509.chain")
 local stack_lib = require("resty.openssl.stack")
@@ -216,21 +216,30 @@ function _M:get_timeout()
   return tonumber(C.SSL_SESSION_get_timeout(session))
 end
 
-local ssl_verify_default_cb = ffi_cast("verify_callback*", function()
+local ssl_verify_default_cb = ffi_cast("verify_callback", function()
   return 1
 end)
 
 function _M:set_verify(mode, cb)
+  if self._verify_cb then
+    self._verify_cb:free()
+  end
+
   if cb then
-    cb = ffi_cast("verify_callback*", cb)
+    cb = ffi_cast("verify_callback", cb)
+    self._verify_cb = cb
   end
 
   C.SSL_set_verify(self.ctx, mode, cb or ssl_verify_default_cb)
-  if cb then
-    cb:free()
-  end
 
   return true
+end
+
+function _M:free_verify_cb()
+  if self._verify_cb then
+    self._verify_cb:free()
+    self._verify_cb = nil
+  end
 end
 
 function _M:set_options(...)

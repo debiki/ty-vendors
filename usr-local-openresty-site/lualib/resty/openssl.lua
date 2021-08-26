@@ -1,39 +1,53 @@
+local ffi = require("ffi")
+local C = ffi.C
+local ffi_cast = ffi.cast
+local ffi_str = ffi.string
+
+require "resty.openssl.include.crypto"
+require "resty.openssl.include.evp"
+require "resty.openssl.include.objects"
 local OPENSSL_30 = require("resty.openssl.version").OPENSSL_30
+local format_error = require("resty.openssl.err").format_error
 
 
 local _M = {
-  _VERSION = '0.6.10',
-  bn = require("resty.openssl.bn"),
-  cipher = require("resty.openssl.cipher"),
-  digest = require("resty.openssl.digest"),
-  hmac = require("resty.openssl.hmac"),
-  kdf = require("resty.openssl.kdf"),
-  pkey = require("resty.openssl.pkey"),
-  objects = require("resty.openssl.objects"),
-  rand = require("resty.openssl.rand"),
-  version = require("resty.openssl.version"),
-  x509 = require("resty.openssl.x509"),
-  altname = require("resty.openssl.x509.altname"),
-  chain = require("resty.openssl.x509.chain"),
-  csr = require("resty.openssl.x509.csr"),
-  crl = require("resty.openssl.x509.crl"),
-  extension = require("resty.openssl.x509.extension"),
-  extensions = require("resty.openssl.x509.extensions"),
-  name = require("resty.openssl.x509.name"),
-  revoked = require("resty.openssl.x509.revoked"),
-  store = require("resty.openssl.x509.store"),
-  pkcs12 = require("resty.openssl.pkcs12"),
-  ssl = require("resty.openssl.ssl"),
-  ssl_ctx = require("resty.openssl.ssl_ctx"),
+  _VERSION = '0.7.4',
 }
 
-if OPENSSL_30 then
-  _M.provider = require("resty.openssl.provider")
+function _M.load_modules()
+  _M.bn = require("resty.openssl.bn")
+  _M.cipher = require("resty.openssl.cipher")
+  _M.digest = require("resty.openssl.digest")
+  _M.hmac = require("resty.openssl.hmac")
+  _M.kdf = require("resty.openssl.kdf")
+  _M.pkey = require("resty.openssl.pkey")
+  _M.objects = require("resty.openssl.objects")
+  _M.rand = require("resty.openssl.rand")
+  _M.version = require("resty.openssl.version")
+  _M.x509 = require("resty.openssl.x509")
+  _M.altname = require("resty.openssl.x509.altname")
+  _M.chain = require("resty.openssl.x509.chain")
+  _M.csr = require("resty.openssl.x509.csr")
+  _M.crl = require("resty.openssl.x509.crl")
+  _M.extension = require("resty.openssl.x509.extension")
+  _M.extensions = require("resty.openssl.x509.extensions")
+  _M.name = require("resty.openssl.x509.name")
+  _M.revoked = require("resty.openssl.x509.revoked")
+  _M.store = require("resty.openssl.x509.store")
+  _M.pkcs12 = require("resty.openssl.pkcs12")
+  _M.ssl = require("resty.openssl.ssl")
+  _M.ssl_ctx = require("resty.openssl.ssl_ctx")
+
+  if OPENSSL_30 then
+    _M.provider = require("resty.openssl.provider")
+  end
+
+  _M.bignum = _M.bn
 end
 
-_M.bignum = _M.bn
-
 function _M.luaossl_compat()
+  _M.load_modules()
+
   _M.csr.setSubject = _M.csr.set_subject_name
   _M.csr.setPublicKey = _M.csr.set_pubkey
 
@@ -182,34 +196,53 @@ function _M.luaossl_compat()
   end
 end
 
--- we made a typo sometime, this is going to be removed in next major release
-_M.luaossl_compact = _M.luaossl_compat
-
-local resty_hmac_compat_patched = false
-function _M.resty_hmac_compat()
-  if resty_hmac_compat_patched then
-    return
-  end
-  if _M.version.OPENSSL_10 then
-    error("use resty_hmac_compat in OpenSSL 1.0 is not supported")
+function _M.set_fips_mode(enable)
+  if not not enable == _M.get_fips_mode() then
+    return true
   end
 
-  require("resty.openssl.include.evp")
-  require("ffi").cdef [[
-    // originally named evp_cipher_ctx_st in evp.lua
-    struct evp_md_ctx_st {
-      const EVP_MD *digest;
-      ENGINE *engine;             /* functional reference if 'digest' is
-                                  * ENGINE-provided */
-      unsigned long flags;
-      void *md_data;
-      /* Public key context for sign/verify */
-      EVP_PKEY_CTX *pctx;
-      /* Update function: usually copied from EVP_MD */
-      int (*update) (EVP_MD_CTX *ctx, const void *data, size_t count);
-    }/* EVP_MD_CTX */ ;
-  ]]
-  resty_hmac_compat_patched = true
+  if C.FIPS_mode_set(enable and 1 or 0) == 0 then
+    return false, format_error("openssl.set_fips_mode")
+  end
+
+  return true
+end
+
+function _M.get_fips_mode()
+  return C.FIPS_mode() == 1
+end
+
+local function get_list_func(cf, l)
+  return function(elem, from, to, arg)
+    if elem ~= nil then
+      local nid = cf(elem)
+      table.insert(l, ffi_str(C.OBJ_nid2sn(nid)))
+    end
+  end
+end
+
+function _M.list_cipher_algorithms()
+  local ret = {}
+  local fn = ffi_cast("fake_openssl_cipher_list_fn*",
+                      get_list_func(C.EVP_CIPHER_nid, ret))
+
+  C.EVP_CIPHER_do_all_sorted(fn, nil)
+
+  fn:free()
+
+  return ret
+end
+
+function _M.list_digest_algorithms()
+  local ret = {}
+  local fn = ffi_cast("fake_openssl_md_list_fn*",
+                      get_list_func(C.EVP_MD_type, ret))
+
+  C.EVP_MD_do_all_sorted(fn, nil)
+
+  fn:free()
+
+  return ret
 end
 
 return _M

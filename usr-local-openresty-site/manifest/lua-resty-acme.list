@@ -11,5 +11,5 @@ lualib/resty/acme/storage/vault.lua
 lualib/resty/acme/storage/file.lua
 lualib/resty/acme/storage/consul.lua
 lualib/resty/acme/eab/zerossl-com.lua
-pod/lua-resty-acme-0.5.11/resty.acme.storage.readme.pod
-pod/lua-resty-acme-0.5.11/lua-resty-acme-0.5.11.pod
+pod/lua-resty-acme-0.7.1/resty.acme.storage.readme.pod
+pod/lua-resty-acme-0.7.1/lua-resty-acme-0.7.1.pod

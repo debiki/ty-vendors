@@ -7,13 +7,14 @@ require "resty.openssl.include.pem"
 require "resty.openssl.include.x509v3"
 require "resty.openssl.include.x509.csr"
 require "resty.openssl.include.asn1"
+local stack_macro = require "resty.openssl.include.stack"
 local stack_lib = require "resty.openssl.stack"
 local pkey_lib = require "resty.openssl.pkey"
 local digest_lib = require("resty.openssl.digest")
 local extension_lib = require("resty.openssl.x509.extension")
 local extensions_lib = require("resty.openssl.x509.extensions")
 local util = require "resty.openssl.util"
-local ctypes = require "resty.openssl.aux.ctypes"
+local ctypes = require "resty.openssl.auxiliary.ctypes"
 local txtnid2nid = require("resty.openssl.objects").txtnid2nid
 local format_error = require("resty.openssl.err").format_error
 local OPENSSL_10 = require("resty.openssl.version").OPENSSL_10
@@ -84,7 +85,7 @@ function _M.new(csr, fmt)
     end
 
     fmt = fmt or "*"
-    while true do
+    while true do -- luacheck: ignore 512 -- loop is executed at most once
       if fmt == "PEM" or fmt == "*" then
         ctx = C.PEM_read_bio_X509_REQ(bio, nil, nil, nil)
         if ctx ~= nil then
@@ -123,9 +124,6 @@ end
 function _M.istype(l)
   return l and l and l.ctx and ffi.istype(x509_req_ptr_ct, l.ctx)
 end
-
--- backward compatibility
-_M.set_subject_alt = _M.set_subject_alt_name
 
 function _M:tostring(fmt)
   return tostring(self, fmt)
@@ -209,8 +207,12 @@ end
 local function modify_extension(replace, ctx, nid, toset, crit)
   local extensions_ptr = stack_ptr_type()
   extensions_ptr[0] = C.X509_REQ_get_extensions(ctx)
-  local need_cleanup = extensions_ptr[0] ~= nil
+  local need_cleanup = extensions_ptr[0] ~= nil and
   -- extensions_ptr being nil is fine: it may just because there's no extension yet
+  -- https://github.com/openssl/openssl/commit/2039ac07b401932fa30a05ade80b3626e189d78a
+  -- introduces a change that a empty stack instead of NULL will be returned in no extension
+  -- is found. so we need to double check the number if it's not NULL.
+                        stack_macro.OPENSSL_sk_num(extensions_ptr[0]) > 0
 
   local flag
   if replace then

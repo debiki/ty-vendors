@@ -21,7 +21,7 @@ end
 local wait_backoff_series = {1, 1, 2, 3, 5, 8, 13, 21}
 
 local _M = {
-  _VERSION = '0.5.11'
+  _VERSION = '0.7.1'
 }
 local mt = {__index = _M}
 
@@ -47,7 +47,11 @@ local default_config = {
     shm_name = "acme"
   },
   -- the challenge types enabled
-  enabled_challenge_handlers = {"http-01"}
+  enabled_challenge_handlers = {"http-01"},
+  -- select preferred root CA issuer's Common Name if appliable
+  preferred_chain = nil,
+  -- callback function that allows to wait before signaling ACME server to validate
+  challenge_start_callback = nil,
 }
 
 local function new_httpc()
@@ -111,7 +115,7 @@ function _M.new(conf)
   end
 
   if conf.account_key then
-    local ok, err = set_account_key(self, conf.account_key)
+    local _, err = set_account_key(self, conf.account_key)
     if err then
       return nil, err
     end
@@ -125,17 +129,7 @@ _M.set_account_key = set_account_key
 function _M:init()
   local httpc = new_httpc()
 
-  local url = self.conf.api_uri
-  -- we accept both API endpoint with or without /directory
-  -- to avoid confusion
-  if not ngx.re.match(url, "/directory$") then
-    if not ngx.re.match(url, "/$") then
-      url = url .. "/"
-    end
-    url = url .. "directory"
-  end
-
-  local resp, err = httpc:request_uri(url)
+  local resp, err = httpc:request_uri(self.conf.api_uri)
   if err then
     return "acme directory request failed: " .. err
   end
@@ -194,9 +188,10 @@ end
 
 --- Enclose the provided payload in JWS
 --
--- @param url        ACME service URL
+-- @param url       ACME service URL
 -- @param payload   (json) data which will be wrapped in JWS
-function _M:jws(url, payload)
+-- @param nonce     nonce to be used in JWS, if not provided new nonce will be requested
+function _M:jws(url, payload, nonce)
   if not self.account_pkey then
     return nil, "account key does not specified"
   end
@@ -205,9 +200,12 @@ function _M:jws(url, payload)
     return nil, "url is not defined"
   end
 
-  local nonce, err = self:new_nonce()
-  if err then
-    return nil, "can't get new nonce from acme server"
+  if not nonce then
+    local err
+    nonce, err = self:new_nonce()
+    if err then
+      return nil, "can't get new nonce from acme server: " .. err
+    end
   end
 
   local jws = {
@@ -278,7 +276,7 @@ end
 -- @param headers   Lua table with request headers
 --
 -- @return Response object or tuple (nil, msg) on errors
-function _M:post(url, payload, headers)
+function _M:post(url, payload, headers, nonce)
   local httpc = new_httpc()
   if not headers then
     headers = {
@@ -288,7 +286,7 @@ function _M:post(url, payload, headers)
     headers["content-type"] = "application/jose+json"
   end
 
-  local jws, err = self:jws(url, payload)
+  local jws, err = self:jws(url, payload, nonce)
   if not jws then
     return nil, nil, err
   end
@@ -307,11 +305,20 @@ function _M:post(url, payload, headers)
   log(ngx_DEBUG, "acme request: ", url, " response: ", resp.body)
 
   local body
-  if resp.headers['Content-Type'] == "application/json" then
+  if resp.headers['Content-Type']:sub(1, 16) == "application/json" then
     body = json.decode(resp.body)
-  elseif resp.headers['Content-Type'] == "application/problem+json" then
+  elseif resp.headers['Content-Type']:sub(1, 24) == "application/problem+json" then
     body = json.decode(resp.body)
-    return nil, nil, body.detail or body.type
+    if body.type == 'urn:ietf:params:acme:error:badNonce' and resp.headers["Replay-Nonce"] then
+      if not nonce then
+        log(ngx_WARN, "bad nonce: recoverable error, retrying")
+        return self:post(url, payload, headers, resp.headers["Replay-Nonce"])
+      else
+        return nil, nil, "bad nonce: failed again, bailing out"
+      end
+    else
+      return nil, nil, body.detail or body.type
+    end
   else
     body = resp.body
   end
@@ -339,6 +346,9 @@ function _M:new_account()
       return nil, "eab_handler undefined while EAB is required by CA"
     end
     local eab_kid, eab_hmac_key, err = self.eab_handler(self.conf.account_email)
+    if err then
+      return nil, "eab_handler returned an error: " .. err
+    end
     self.eab_kid = eab_kid
     self.eab_hmac_key = decode_base64url(eab_hmac_key)
   end
@@ -400,12 +410,12 @@ function _M:new_order(...)
 end
 
 local function watch_order_status(self, order_url, target)
-  local order_status, err, _
+  local order_status, err
   for _, t in pairs(wait_backoff_series) do
     ngx.sleep(t)
     -- POST-as-GET request with empty payload
     order_status, _, err = self:post(order_url)
-    log(ngx_DEBUG, "check order: ", json.encode(order_status))
+    log(ngx_DEBUG, "check order: ", json.encode(order_status), " err: ", err)
     if order_status then
       if order_status.status == target then
         break
@@ -442,6 +452,22 @@ local function watch_order_status(self, order_url, target)
   return order_status
 end
 
+
+local rel_alternate_pattern = '<(.+)>;%s*rel="alternate"'
+local function parse_alternate_link(headers)
+  local link_header = headers["Link"]
+  if type(link_header) == "string" then
+    return link_header:match(rel_alternate_pattern)
+  elseif link_header then
+    for _, link in pairs(link_header) do
+      local m = link:match(rel_alternate_pattern)
+      if m then
+        return m
+      end
+    end
+  end
+end
+
 function _M:finalize(finalize_url, order_url, csr)
   local payload = {
     csr = encode_base64url(csr)
@@ -469,12 +495,42 @@ function _M:finalize(finalize_url, order_url, csr)
   end
 
   -- POST-as-GET request with empty payload
-  local body, _, err = self:post(order_status.certificate)
+  local body, headers, err = self:post(order_status.certificate)
   if err then
     return nil, "failed to fetch certificate: " .. err
   end
-  --, key:toPEM("private"))
-  return body, err
+
+  local preferred_chain = self.conf.preferred_chain
+  if not preferred_chain then
+    return body
+  end
+
+  local ok, err = util.check_chain_root_issuer(body, preferred_chain)
+  if not ok then
+    log(ngx_DEBUG, "configured preferred chain issuer CN \"", preferred_chain, "\" not found ",
+                    "in default chain, downloading alternate chain: ", err)
+    local alternate_link = parse_alternate_link(headers)
+    if not alternate_link then
+      log(ngx_WARN, "failed to fetch alternate chain because no alternate link is found, ",
+                    "fallback to default chain")
+    else
+      local body_alternate, _, err = self:post(alternate_link)
+
+      if err then
+        log(ngx_WARN, "failed to fetch alternate chain, fallback to default: ", err)
+      else
+        local ok, err = util.check_chain_root_issuer(body_alternate, preferred_chain)
+        if ok then
+          log(ngx_DEBUG, "alternate chain is selected")
+          return body_alternate
+        end
+        log(ngx_WARN, "configured preferred chain issuer CN \"", preferred_chain, "\" also not found ",
+                      "in alternate chain, fallback to default chain: ", err)
+      end
+    end
+  end
+
+  return body
 end
 
 -- create certificate workflow, used in new cert or renewal
@@ -493,6 +549,7 @@ function _M:order_certificate(domain_key, ...)
   local authzs = order_body.authorizations
   local registered_challenges = {}
   local registered_challenge_count = 0
+  local has_valid_challenge = false
 
   for _, authz in ipairs(authzs) do
     -- POST-as-GET request with empty payload
@@ -507,7 +564,12 @@ function _M:order_certificate(domain_key, ...)
     end
     for _, challenge in ipairs(challenges.challenges) do
       local typ = challenge.type
-      if self.challenge_handlers[typ] then
+      if challenge.status ~= 'pending' then
+        if challenge.status == 'valid' then
+          has_valid_challenge = true
+        end
+        log(ngx_DEBUG, "challenge ", typ, ": ", challenge.token, " is ", challenge.status, ", skipping")
+      elseif self.challenge_handlers[typ] then
         local err = self.challenge_handlers[typ]:register_challenge(
           challenge.token,
           challenge.token .. "." .. self.account_thumbprint,
@@ -519,6 +581,11 @@ function _M:order_certificate(domain_key, ...)
         registered_challenges[registered_challenge_count + 1] = challenge.token
         registered_challenge_count = registered_challenge_count + 1
         log(ngx_DEBUG, "register challenge ", typ, ": ", challenge.token)
+        if self.conf.challenge_start_callback then
+          while not self.conf.challenge_start_callback(typ, challenge.token) do
+            ngx.sleep(1)
+          end
+        end
         -- signal server to start challenge check
         -- needs to be empty json body rather than empty string
         -- https://tools.ietf.org/html/rfc8555#section-7.5.1
@@ -531,8 +598,8 @@ function _M:order_certificate(domain_key, ...)
 ::nextchallenge::
   end
 
-  if registered_challenge_count == 0 then
-    return nil, "no challenge is registered"
+  if registered_challenge_count == 0 and not has_valid_challenge then
+    return nil, "no challenge is registered and no challenge is valid"
   end
 
   -- Wait until the order is ready

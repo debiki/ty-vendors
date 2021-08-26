@@ -4,7 +4,9 @@
 =head1 lua-resty-openssl
 
 
-FFI-based OpenSSL binding for LuaJIT, supporting OpenSSL 3.0, 1.1 and 1.0.2 series
+FFI-based OpenSSL binding for LuaJIT, supporting OpenSSL 3.0, 1.1 and 1.0.2 series.
+
+BoringSSL is also supported.
 
 !L<Build Status|https://github.com/fffonion/lua-resty-openssl/workflows/Tests/badge.svg> !L<luarocks|https://img.shields.io/luarocks/v/fffonion/lua-resty-openssl?color=%232c3e67> !L<opm|https://img.shields.io/opm/v/fffonion/lua-resty-openssl?color=%23599059>
 
@@ -37,18 +39,28 @@ using C<error()> but instead return as last parameter.
 Each Lua table returned by C<new()> contains a cdata object C<ctx>. User are not supposed to manully setting
 C<ffi.gc> or calling corresponding destructor of the C<ctx> struct (like C<*_free> functions).
 
+BoringSSL removes some algorithms and not all functionalities below is supported by BoringSSL. Please
+consul its manual for differences between OpenSSL API.
+
 
 
 
 =head2 resty.openssl
 
 
-This meta module provides a version sanity check against linked OpenSSL library
-and returns all exported modules to a table.
+This meta module provides a version sanity check against linked OpenSSL library.
 
 
-    return {
-      _VERSION = 'x.y.z',
+
+
+=head3 openssl.load_modules
+
+
+B<syntax>: I<openssl.load_modules()>
+
+Load all available sub modules into current module:
+
+
       bn = require("resty.openssl.bn"),
       cipher = require("resty.openssl.cipher"),
       digest = require("resty.openssl.digest"),
@@ -69,7 +81,6 @@ and returns all exported modules to a table.
       store = require("resty.openssl.x509.store"),
       ssl = require("resty.openssl.ssl"),
       ssl_ctx = require("resty.openssl.ssl_ctx"),
-    }
 
 Starting OpenSSL 3.0, L<`provider`> is also available.
 
@@ -90,13 +101,22 @@ Note that not all C<luaossl> API has been implemented, please check readme for s
 
 
 
-=head3 openssl.resty_hmac_compat
+=head3 openssl.get_fips_mode
 
 
-B<syntax>: I<openssl.resty_hmac_compat()>
+B<syntax>: I<enabled = openssl.get_fips_mode()>
 
-Call this function before C<require("resty.hmac")> to allow these two libraries play nice with
-each other. This function is not available with OpenSSL 1.0.
+Returns a boolean indicating if FIPS mode is enabled.
+
+
+
+
+=head3 openssl.get_fips_mode
+
+
+B<syntax>: I<ok, err = openssl.set_fips_mode(enabled)>
+
+Toggle FIPS mode on or off.
 
 
 
@@ -627,42 +647,32 @@ Returns a ASN1_OBJECT of key type of the private key as a table.
 
 B<syntax>: I<signature, err = pk:sign(digest)>
 
+B<syntax>: I<signature, err = pk:sign(message, md_alg?, padding?, opts?)>
+
 Perform a digest signing using the private key defined in C<pkey>
-instance. The C<digest> parameter must be a L<resty.openssl.digest> 
+instance. The first parameter must be a L<resty.openssl.digest>
 instance or a string. Returns the signed text and error if any.
 
-When passing a L<digest> instance as C<digest> parameter, it should not
+When passing a L<digest> instance as first parameter, it should not
 have been called L<final()>, user should only use L<update()>.
+This mode only supports RSA and EC keys.
 
-For RSA and EC keys, passing a string as C<digest> parameter does the SHA256 as digest method
-by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA signing and requires
-C<digest> to be a string. No message digest is used for Ed keys.
+When passing a string as first parameter, C<md_alg> parameter will specify the name
+to use when signing. When C<md_alg> is undefined, for RSA and EC keys, this function does SHA256
+by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA signing,
+no message digest should be specified and will not be used.
+
+C<opts> is a table that accepts additional parameters.
+
+For RSA key, it's also possible to specify C<padding> scheme. The choice of values are same
+as those in L<pkey:encrypt>. When C<padding> is C<RSA_PKCS1_PSS_PADDING>, it's
+possible to specify PSS salt length by setting C<opts.pss_saltlen>.
 
 For EC key, this function does a ECDSA signing.
-
 Note that OpenSSL does not support EC digital signature (ECDSA) with the
 obsolete MD5 hash algorithm and will return error on this combination. See
 L<EVP_DigestSign(3)|https://www.openssl.org/docs/manmaster/man3/EVP_DigestSign.html>
 for a list of algorithms and associated public key algorithms.
-
-
-    -- RSA and EC keys
-    local pk, err = require("resty.openssl.pkey").new()
-    local digest, err = require("resty.openssl.digest").new("SHA256")
-    digest:update("dog")
-    -- WRONG: 
-    -- digest:final("dog")
-    local signature, err = pk:sign(digest)
-    -- uses SHA256 by default
-    local signature, err = pk:sign("dog")
-    ngx.say(ngx.encode_base64(signature))
-    
-    -- Ed25519 and Ed448 keys
-    local pk, err = require("resty.openssl.pkey").new({
-      type = "Ed25519",
-    })
-    local signature, err = pk:sign("23333")
-    ngx.say(ngx.encode_base64(signature))
 
 
 
@@ -672,15 +682,29 @@ for a list of algorithms and associated public key algorithms.
 
 B<syntax>: I<ok, err = pk:verify(signature, digest)>
 
+B<syntax>: I<ok, err = pk:verify(signature, message, md_alg?, padding?, opts?)>
+
 Verify a signture (which can be the string returned by L<pkey:sign>). The second
 argument must be a L<resty.openssl.digest> instance that uses
 the same digest algorithm as used in C<sign> or a string. C<ok> returns C<true> if verficiation is
 successful and C<false> otherwise. Note when verfication failed C<err> will not be set.
-For EC key, this function does a ECDSA verification.
 
-For RSA and EC keys, passing a string as C<digest> parameter uses the SHA256 as digest method
-by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA verification and requires
-both C<signature> and C<digest> to be string. No message digest is used for Ed keys.
+When passing L<digest> instances as second parameter, it should not
+have been called L<final()>, user should only use L<update()>.
+This mode only supports RSA and EC keys.
+
+When passing a string as second parameter, C<md_alg> parameter will specify the name
+to use when verifying. When C<md_alg> is undefined, for RSA and EC keys, this function does SHA256
+by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA verification,
+no message digest should be specified and will not be used.
+
+C<opts> is a table that accepts additional parameters.
+
+For RSA key, it's also possible to specify C<padding> scheme. The choice of values are same
+as those in L<pkey:encrypt>. When C<padding> is C<RSA_PKCS1_PSS_PADDING>, it's
+possible to specify PSS salt length by setting C<opts.pss_saltlen>.
+
+For EC key, this function does a ECDSA verification.
 
 
     -- RSA and EC keys
@@ -693,12 +717,16 @@ both C<signature> and C<digest> to be string. No message digest is used for Ed k
     -- uses SHA256 by default
     local signature, err = pk:sign("dog")
     ngx.say(ngx.encode_base64(signature))
+    -- uses SHA256 and PSS padding
+    local signature_pss, err = pk:sign("dog", "sha256", pk.PADDINGS.RSA_PKCS1_PSS_PADDING)
     
     digest, err = require("resty.openssl.digest").new("SHA256")
     digest:update("dog")
     local ok, err = pk:verify(signature, digest)
     -- uses SHA256 by default
     local ok, err = pk:verify(signature, "dog")
+    -- uses SHA256 and PSS padding
+    local ok, err = pk:verify(signature_pss, "dog", "sha256", pk.PADDINGS.RSA_PKCS1_PSS_PADDING)
     
     -- Ed25519 and Ed448 keys
     local pk, err = require("resty.openssl.pkey").new({
@@ -955,6 +983,21 @@ to a number. This is useful when user wants to perform bitwise operations.
     -- outputs 23333
     ngx.say(type(n))
     -- outputs "number"
+
+
+
+
+=head3 bn.generate_prime
+
+
+B<syntax>: I<bn, err = bn.generate_prime(bits, safe)>
+
+Generates a pseudo-random prime number of bit length C<bits>.
+
+If C<safe> is true, it will be a safe prime (i.e. a prime p so that (p-1)/2 is also prime).
+
+The PRNG must be seeded prior to calling BN_generate_prime_ex().
+The prime number generation has a negligible error probability.
 
 
 
@@ -2314,7 +2357,7 @@ Outputs CSR in PEM-formatted text.
 
 
 
-=head2 resty.openssl.crl
+=head2 resty.openssl.x509.crl
 
 
 Module to interact with X509_CRL(certificate revocation list).
@@ -2730,9 +2773,6 @@ Adds a name to altname stack, first argument is case-insensitive and can be one 
     URI
     DNSName
     DNS
-    IPAddress
-    IP
-    DirName
 
 This function can be called multiple times in a chained fashion.
 
@@ -2773,6 +2813,13 @@ with C<-DLUAJIT_ENABLE_LUA52COMPAT> flag; otherwise use C<all>, C<each>, C<index
 instead.
 
 See also L<functions for stack-like objects>.
+
+Only the following types are decoded, other types are decoded as C<< "TYPE:<unsupported>" >>:
+
+    RFC822Name / Email
+    URI
+    DNS
+    DirName
 
 
 
@@ -2887,6 +2934,20 @@ for an example to create extension with an unknown nid.
 
 
 
+=head3 extension:to_der
+
+
+B<syntax>: I<der, ok = extension:to_der()>
+
+Returns the ASN.1 encoded (DER) value of the extension.
+
+C<nid_or_txt> is a number or text representation of [NID]. Note C<DER> is a binary
+encoding format. Consider using L<extension:text> for human readable
+or printable output.
+
+
+
+
 =head3 extension.from_data
 
 
@@ -2915,6 +2976,29 @@ L<x509.extension.dist_points>
 
 C<nid_or_txt> is a number or text representation of [NID] and
 C<crit> is the critical flag of the extension.
+
+
+
+
+=head3 extension.to_data
+
+
+B<syntax>: I<ext, ok = extension:to_data(nid_or_txt)>
+
+Convert the C<extension> to another wrapper instance. Currently supported following:
+
+
+=over
+
+
+=item *
+
+L<x509.altname>
+
+
+=back
+
+C<nid_or_txt> is a number or text representation of [NID].
 
 
 
@@ -2965,7 +3049,9 @@ L<resty.openssl.objects> to print human readable texts.
 
 B<syntax>: I<txt, err = extension:text()>
 
-Returns the text representation of extension
+Returns the text representation of extension. This functions calls C<X509V3_EXT_print> under the hood,
+and fallback to C<ASN1_STRING_print> if the former failed. It thus has exact same output with that
+of C<openssl x509 -text>.
 
 
     local objects = require "resty.openssl.objects"
@@ -3329,7 +3415,7 @@ B<syntax>: I<ok, err = store:add(x509_or_crl)>
 
 Adds a X.509 or a CRL object into store.
 The argument must be a L<resty.openssl.x509> instance or a
-L<resty.openssl.x509.store> instance.
+L<resty.openssl.x509.crl> instance.
 
 
 
@@ -3480,7 +3566,7 @@ Wraps the C<SSL_CTX*> instance from current downstream request.
 
 
 
-=head3 ssl_ctx.from_request
+=head3 ssl_ctx.from_socket
 
 
 B<syntax>: I<sess, err = ssl_ctx.from_socket(sock)>
@@ -3630,7 +3716,9 @@ If it's created by C<new()>: set GC handler to sk_TYPE_pop_free
 
 # lua-resty-openssl
 
-FFI-based OpenSSL binding for LuaJIT, supporting OpenSSL 3.0, 1.1 and 1.0.2 series
+FFI-based OpenSSL binding for LuaJIT, supporting OpenSSL 3.0, 1.1 and 1.0.2 series.
+
+BoringSSL is also supported.
 
 ![Build Status](https://github.com/fffonion/lua-resty-openssl/workflows/Tests/badge.svg) ![luarocks](https://img.shields.io/luarocks/v/fffonion/lua-resty-openssl?color=%232c3e67) ![opm](https://img.shields.io/opm/v/fffonion/lua-resty-openssl?color=%23599059)
 
@@ -3644,6 +3732,8 @@ Table of Contents
   * [resty.openssl](#restyopenssl)
     + [openssl.luaossl_compat](#opensslluaossl_compat)
     + [openssl.resty_hmac_compat](#opensslresty_hmac_compat)
+    + [openssl.get_fips_mode](#opensslget_fips_mode)
+    + [openssl.set_fips_mode](#opensslset_fips_mode)
   * [resty.openssl.version](#restyopensslversion)
     + [version_num](#version_num)
     + [version_text](#version_text)
@@ -3799,6 +3889,9 @@ Table of Contents
     + [extension.new](#extensionnew)
     + [extension.dup](#extensiondup)
     + [extension.from_data](#extensionfrom_data)
+    + [extension:to_data](#extensionto_data)
+    + [extension.from_der](#extensionfrom_der)
+    + [extension:to_der](#extensionto_der)
     + [extension.istype](#extensionistype)
     + [extension:get_extension_critical](#extensionget_extension_critical)
     + [extension:set_extension_critical](#extensionset_extension_critical)
@@ -3891,16 +3984,24 @@ using `error()` but instead return as last parameter.
 Each Lua table returned by `new()` contains a cdata object `ctx`. User are not supposed to manully setting
 `ffi.gc` or calling corresponding destructor of the `ctx` struct (like `*_free` functions).
 
+BoringSSL removes some algorithms and not all functionalities below is supported by BoringSSL. Please
+consul its manual for differences between OpenSSL API.
+
 [Back to TOC](#table-of-contents)
 
 ## resty.openssl
 
-This meta module provides a version sanity check against linked OpenSSL library
-and returns all exported modules to a table.
+This meta module provides a version sanity check against linked OpenSSL library.
+
+[Back to TOC](#table-of-contents)
+
+### openssl.load_modules
+
+**syntax**: *openssl.load_modules()*
+
+Load all available sub modules into current module:
 
 ```lua
-return {
-  _VERSION = 'x.y.z',
   bn = require("resty.openssl.bn"),
   cipher = require("resty.openssl.cipher"),
   digest = require("resty.openssl.digest"),
@@ -3921,7 +4022,6 @@ return {
   store = require("resty.openssl.x509.store"),
   ssl = require("resty.openssl.ssl"),
   ssl_ctx = require("resty.openssl.ssl_ctx"),
-}
 ```
 
 Starting OpenSSL 3.0, [`provider`](#restyopensslprovider) is also available.
@@ -3940,12 +4040,19 @@ Note that not all `luaossl` API has been implemented, please check readme for so
 
 [Back to TOC](#table-of-contents)
 
-### openssl.resty_hmac_compat
+### openssl.get_fips_mode
 
-**syntax**: *openssl.resty_hmac_compat()*
+**syntax**: *enabled = openssl.get_fips_mode()*
 
-Call this function before `require("resty.hmac")` to allow these two libraries play nice with
-each other. This function is not available with OpenSSL 1.0.
+Returns a boolean indicating if FIPS mode is enabled.
+
+[Back to TOC](#table-of-contents)
+
+### openssl.get_fips_mode
+
+**syntax**: *ok, err = openssl.set_fips_mode(enabled)*
+
+Toggle FIPS mode on or off.
 
 [Back to TOC](#table-of-contents)
 
@@ -4373,43 +4480,32 @@ ngx.say(require("cjson").encode(pkey:get_key_type()))
 
 **syntax**: *signature, err = pk:sign(digest)*
 
+**syntax**: *signature, err = pk:sign(message, md_alg?, padding?, opts?)*
+
 Perform a digest signing using the private key defined in `pkey`
-instance. The `digest` parameter must be a [resty.openssl.digest](#restyopenssldigest) 
+instance. The first parameter must be a [resty.openssl.digest](#restyopenssldigest)
 instance or a string. Returns the signed text and error if any.
 
-When passing a [digest](#restyopenssldigest) instance as `digest` parameter, it should not
+When passing a [digest](#restyopenssldigest) instance as first parameter, it should not
 have been called [final()](#digestfinal), user should only use [update()](#digestupdate).
+This mode only supports RSA and EC keys.
 
-For RSA and EC keys, passing a string as `digest` parameter does the SHA256 as digest method
-by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA signing and requires
-`digest` to be a string. No message digest is used for Ed keys.
+When passing a string as first parameter, `md_alg` parameter will specify the name
+to use when signing. When `md_alg` is undefined, for RSA and EC keys, this function does SHA256
+by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA signing,
+no message digest should be specified and will not be used.
+
+`opts` is a table that accepts additional parameters.
+
+For RSA key, it's also possible to specify `padding` scheme. The choice of values are same
+as those in [pkey:encrypt](#pkeyencrypt). When `padding` is `RSA_PKCS1_PSS_PADDING`, it's
+possible to specify PSS salt length by setting `opts.pss_saltlen`.
 
 For EC key, this function does a ECDSA signing.
-
 Note that OpenSSL does not support EC digital signature (ECDSA) with the
 obsolete MD5 hash algorithm and will return error on this combination. See
 [EVP_DigestSign(3)](https://www.openssl.org/docs/manmaster/man3/EVP_DigestSign.html)
 for a list of algorithms and associated public key algorithms.
-
-```lua
--- RSA and EC keys
-local pk, err = require("resty.openssl.pkey").new()
-local digest, err = require("resty.openssl.digest").new("SHA256")
-digest:update("dog")
--- WRONG: 
--- digest:final("dog")
-local signature, err = pk:sign(digest)
--- uses SHA256 by default
-local signature, err = pk:sign("dog")
-ngx.say(ngx.encode_base64(signature))
-
--- Ed25519 and Ed448 keys
-local pk, err = require("resty.openssl.pkey").new({
-  type = "Ed25519",
-})
-local signature, err = pk:sign("23333")
-ngx.say(ngx.encode_base64(signature))
-```
 
 [Back to TOC](#table-of-contents)
 
@@ -4417,15 +4513,29 @@ ngx.say(ngx.encode_base64(signature))
 
 **syntax**: *ok, err = pk:verify(signature, digest)*
 
+**syntax**: *ok, err = pk:verify(signature, message, md_alg?, padding?, opts?)*
+
 Verify a signture (which can be the string returned by [pkey:sign](#pkey-sign)). The second
 argument must be a [resty.openssl.digest](#restyopenssldigest) instance that uses
 the same digest algorithm as used in `sign` or a string. `ok` returns `true` if verficiation is
 successful and `false` otherwise. Note when verfication failed `err` will not be set.
-For EC key, this function does a ECDSA verification.
 
-For RSA and EC keys, passing a string as `digest` parameter uses the SHA256 as digest method
-by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA verification and requires
-both `signature` and `digest` to be string. No message digest is used for Ed keys.
+When passing [digest](#restyopenssldigest) instances as second parameter, it should not
+have been called [final()](#digestfinal), user should only use [update()](#digestupdate).
+This mode only supports RSA and EC keys.
+
+When passing a string as second parameter, `md_alg` parameter will specify the name
+to use when verifying. When `md_alg` is undefined, for RSA and EC keys, this function does SHA256
+by default. For Ed25519 or Ed448 keys, this function does a PureEdDSA verification,
+no message digest should be specified and will not be used.
+
+`opts` is a table that accepts additional parameters.
+
+For RSA key, it's also possible to specify `padding` scheme. The choice of values are same
+as those in [pkey:encrypt](#pkeyencrypt). When `padding` is `RSA_PKCS1_PSS_PADDING`, it's
+possible to specify PSS salt length by setting `opts.pss_saltlen`.
+
+For EC key, this function does a ECDSA verification.
 
 ```lua
 -- RSA and EC keys
@@ -4438,12 +4548,16 @@ local signature, err = pk:sign(digest)
 -- uses SHA256 by default
 local signature, err = pk:sign("dog")
 ngx.say(ngx.encode_base64(signature))
+-- uses SHA256 and PSS padding
+local signature_pss, err = pk:sign("dog", "sha256", pk.PADDINGS.RSA_PKCS1_PSS_PADDING)
 
 digest, err = require("resty.openssl.digest").new("SHA256")
 digest:update("dog")
 local ok, err = pk:verify(signature, digest)
 -- uses SHA256 by default
 local ok, err = pk:verify(signature, "dog")
+-- uses SHA256 and PSS padding
+local ok, err = pk:verify(signature_pss, "dog", "sha256", pk.PADDINGS.RSA_PKCS1_PSS_PADDING)
 
 -- Ed25519 and Ed448 keys
 local pk, err = require("resty.openssl.pkey").new({
@@ -4677,6 +4791,19 @@ ngx.say(n)
 ngx.say(type(n))
 -- outputs "number"
 ```
+
+[Back to TOC](#table-of-contents)
+
+### bn.generate_prime
+
+**syntax**: *bn, err = bn.generate_prime(bits, safe)*
+
+Generates a pseudo-random prime number of bit length `bits`.
+
+If `safe` is true, it will be a safe prime (i.e. a prime p so that (p-1)/2 is also prime).
+
+The PRNG must be seeded prior to calling BN_generate_prime_ex().
+The prime number generation has a negligible error probability.
 
 [Back to TOC](#table-of-contents)
 
@@ -5832,7 +5959,7 @@ Outputs CSR in PEM-formatted text.
 
 [Back to TOC](#table-of-contents)
 
-## resty.openssl.crl
+## resty.openssl.x509.crl
 
 Module to interact with X509_CRL(certificate revocation list).
 
@@ -6197,9 +6324,6 @@ Adds a name to altname stack, first argument is case-insensitive and can be one 
     URI
     DNSName
     DNS
-    IPAddress
-    IP
-    DirName
 
 This function can be called multiple times in a chained fashion.
 
@@ -6237,6 +6361,13 @@ with `-DLUAJIT_ENABLE_LUA52COMPAT` flag; otherwise use `all`, `each`, `index` an
 instead.
 
 See also [functions for stack-like objects](#functions-for-stack-like-objects).
+
+Only the following types are decoded, other types are decoded as `"TYPE:<unsupported>"`:
+
+    RFC822Name / Email
+    URI
+    DNS
+    DirName
 
 [Back to TOC](#table-of-contents)
 
@@ -6343,6 +6474,18 @@ for an example to create extension with an unknown nid.
 
 [Back to TOC](#table-of-contents)
 
+### extension:to_der
+
+**syntax**: *der, ok = extension:to_der()*
+
+Returns the ASN.1 encoded (DER) value of the extension.
+
+`nid_or_txt` is a number or text representation of [NID]. Note `DER` is a binary
+encoding format. Consider using [extension:text](#extensiontext) for human readable
+or printable output.
+
+[Back to TOC](#table-of-contents)
+
 ### extension.from_data
 
 **syntax**: *ext, ok = extension.from_data(table, nid_or_txt, crit?)*
@@ -6355,6 +6498,18 @@ Creates a new `extension` instance. `table` can be instance of:
 
 `nid_or_txt` is a number or text representation of [NID] and
 `crit` is the critical flag of the extension.
+
+[Back to TOC](#table-of-contents)
+
+### extension.to_data
+
+**syntax**: *ext, ok = extension:to_data(nid_or_txt)*
+
+Convert the `extension` to another wrapper instance. Currently supported following:
+
+- [x509.altname](#restyopensslx509altname)
+
+`nid_or_txt` is a number or text representation of [NID].
 
 [Back to TOC](#table-of-contents)
 
@@ -6395,7 +6550,9 @@ Returns the name of extension as ASN.1 Object. User can further use helper funct
 
 **syntax**: *txt, err = extension:text()*
 
-Returns the text representation of extension
+Returns the text representation of extension. This functions calls `X509V3_EXT_print` under the hood,
+and fallback to `ASN1_STRING_print` if the former failed. It thus has exact same output with that
+of `openssl x509 -text`.
 
 ```lua
 local objects = require "resty.openssl.objects"
@@ -6704,7 +6861,7 @@ certificates bundle. For example, the package in Debian/Ubuntu is called `ca-cer
 
 Adds a X.509 or a CRL object into store.
 The argument must be a [resty.openssl.x509](#restyopensslx509) instance or a
-[resty.openssl.x509.store](#restyopensslx509store) instance.
+[resty.openssl.x509.crl](#restyopensslx509crl) instance.
 
 [Back to TOC](#table-of-contents)
 
@@ -6828,7 +6985,7 @@ Wraps the `SSL_CTX*` instance from current downstream request.
 
 [Back to TOC](#table-of-contents)
 
-### ssl_ctx.from_request
+### ssl_ctx.from_socket
 
 **syntax**: *sess, err = ssl_ctx.from_socket(sock)*
 

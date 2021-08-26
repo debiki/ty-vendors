@@ -7,7 +7,7 @@ local floor = math.floor
 
 require "resty.openssl.include.bn"
 local crypto_macro = require("resty.openssl.include.crypto")
-local ctypes = require "resty.openssl.aux.ctypes"
+local ctypes = require "resty.openssl.auxiliary.ctypes"
 local format_error = require("resty.openssl.err").format_error
 local OPENSSL_10 = require("resty.openssl.version").OPENSSL_10
 
@@ -131,6 +131,17 @@ function _M:to_number()
   return tonumber(C.BN_get_word(self.ctx))
 end
 _M.tonumber = _M.to_number
+
+function _M.generate_prime(bits, safe)
+  local ctx = C.BN_new()
+  ffi_gc(ctx, C.BN_free)
+
+  if C.BN_generate_prime_ex(ctx, bits, safe and 1 or 0, nil, nil, nil) == 0 then
+    return nil, format_error("bn.BN_generate_prime_ex")
+  end
+
+  return setmetatable( { ctx = ctx }, mt), nil
+end
 
 -- BN_CTX is used to store temporary variable
 -- we only need one per worker

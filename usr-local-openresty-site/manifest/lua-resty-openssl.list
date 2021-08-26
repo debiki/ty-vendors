@@ -32,9 +32,9 @@ lualib/resty/openssl/x509/extensions.lua
 lualib/resty/openssl/x509/name.lua
 lualib/resty/openssl/x509/extension/dist_points.lua
 lualib/resty/openssl/x509/extension/info_access.lua
-lualib/resty/openssl/aux/ctypes.lua
-lualib/resty/openssl/aux/nginx.lua
-lualib/resty/openssl/aux/jwk.lua
+lualib/resty/openssl/auxiliary/ctypes.lua
+lualib/resty/openssl/auxiliary/nginx.lua
+lualib/resty/openssl/auxiliary/jwk.lua
 lualib/resty/openssl/include/pem.lua
 lualib/resty/openssl/include/x509v3.lua
 lualib/resty/openssl/include/bn.lua
@@ -63,4 +63,4 @@ lualib/resty/openssl/include/x509/revoked.lua
 lualib/resty/openssl/include/x509/altname.lua
 lualib/resty/openssl/include/x509/extension.lua
 lualib/resty/openssl/include/x509/name.lua
-pod/lua-resty-openssl-0.6.10/lua-resty-openssl-0.6.10.pod
+pod/lua-resty-openssl-0.7.4/lua-resty-openssl-0.7.4.pod
