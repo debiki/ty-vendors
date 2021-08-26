@@ -2272,6 +2272,12 @@ used for authentication to a secured uwsgi server.
 
 
 
+Since version 1.21.0, variables can be used in the I<C<file>> name.
+
+
+
+
+
 
 
 =head2 uwsgi_ssl_certificate_key
@@ -2309,6 +2315,12 @@ C<engine>:I<C<name>>:I<C<id>>
 can be specified instead of the I<C<file>> (1.7.9),
 which loads a secret key with a specified I<C<id>>
 from the OpenSSL engine I<C<name>>.
+
+
+
+
+
+Since version 1.21.0, variables can be used in the I<C<file>> name.
 
 
 

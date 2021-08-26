@@ -1358,6 +1358,13 @@ can be specified on the same level:
     proxy_cookie_domain ~\.([a-z]+\.[a-z]+)$ $1;
 
 
+If several directives can be applied to the cookie,
+the first matching directive will be chosen.
+
+
+
+
+
 The C<off> parameter cancels the effect
 of the C<proxy_cookie_domain> directives
 inherited from the previous configuration level.
@@ -1398,6 +1405,8 @@ This directive appeared in version 1.19.3.
 
 Sets one or more flags for the cookie.
 The I<C<cookie>> can contain text, variables, and their combinations.
+The I<C<flag>>
+can contain text, variables, and their combinations (1.19.8).
 The
 C<secure>,
 C<httponly>,
@@ -1431,6 +1440,8 @@ can be specified on the same configuration level:
     proxy_cookie_flags ~ nosecure samesite=strict;
 
 
+If several directives can be applied to the cookie,
+the first matching directive will be chosen.
 In the example, the C<httponly> flag
 is added to the cookie C<one>,
 for all other cookies
@@ -1533,6 +1544,13 @@ can be specified on the same level:
     
     proxy_cookie_path /one/ /;
     proxy_cookie_path / /two/;
+
+
+If several directives can be applied to the cookie,
+the first matching directive will be chosen.
+
+
+
 
 
 The C<off> parameter cancels the effect
@@ -2750,6 +2768,14 @@ can be specified on the same level:
     proxy_redirect http://www.example.com/ /;
 
 
+If several directives can be applied to
+the header fields of a proxied server response,
+the first matching directive will be chosen.
+
+
+
+
+
 The C<off> parameter cancels the effect
 of the C<proxy_redirect> directives
 inherited from the previous configuration level.
@@ -3104,6 +3130,12 @@ used for authentication to a proxied HTTPS server.
 
 
 
+Since version 1.21.0, variables can be used in the I<C<file>> name.
+
+
+
+
+
 
 
 =head2 proxy_ssl_certificate_key
@@ -3141,6 +3173,12 @@ C<engine>:I<C<name>>:I<C<id>>
 can be specified instead of the I<C<file>> (1.7.9),
 which loads a secret key with a specified I<C<id>>
 from the OpenSSL engine I<C<name>>.
+
+
+
+
+
+Since version 1.21.0, variables can be used in the I<C<file>> name.
 
 
 

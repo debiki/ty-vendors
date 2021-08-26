@@ -532,6 +532,19 @@ the C<prime256v1> curve was used by default.
 
 
 
+B<NOTE>
+
+When using OpenSSL 1.0.2 or higher,
+this directive sets the list of curves supported by the server.
+Thus, in order for ECDSA certificates to work,
+it is important to include the curves used in the certificates.
+
+
+
+
+
+
+
 
 =head2 ssl_password_file
 

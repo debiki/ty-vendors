@@ -15,9 +15,11 @@ The C<ngx_http_auth_jwt_module> module (1.11.3)
 implements client authorization by validating the provided
 L<JSON Web Token|https://tools.ietf.org/html/rfc7519> (JWT)
 using the specified keys.
-JWT claims must be encoded in a
+JWT claims can be encoded in a
 L<JSON Web Signature|https://tools.ietf.org/html/rfc7515> (JWS)
-structure.
+or
+L<JSON Web Encryption|https://tools.ietf.org/html/rfc7516> (JWE)
+(1.19.7) structure.
 The module can be used for
 L<OpenID Connect|http://openid.net/specs/openid-connect-core-1_0.html>
 authentication.
@@ -38,9 +40,28 @@ via the L<ngx_http_core_module> directive.
 
 
 
-The module supports the following cryptographic
-L<algorithms|https://www.iana.org/assignments/jose/jose.xhtml#web-signature-encryption-algorithms>:
 
+B<NOTE>
+
+This module is available as part of our
+commercial subscription.
+
+
+
+
+
+=head1 Supported Algorithms
+
+
+
+The module supports the following JSON Web
+L<Algorithms|https://www.iana.org/assignments/jose/jose.xhtml#web-signature-encryption-algorithms>.
+
+
+
+
+
+JWS algorithms:
 
 =over
 
@@ -75,6 +96,9 @@ EdDSA (Ed25519 and Ed448 signatures) (1.15.7)
 
 
 
+
+B<NOTE>
+
 Prior to version 1.13.7,
 only HS256, RS256, ES256 algorithms were supported.
 
@@ -83,10 +107,60 @@ only HS256, RS256, ES256 algorithms were supported.
 
 
 
-B<NOTE>
+JWE content encryption algorithms (1.19.7):
 
-This module is available as part of our
-commercial subscription.
+=over
+
+
+
+
+=item *
+
+A128CBC-HS256, A192CBC-HS384, A256CBC-HS512
+
+
+
+=item *
+
+A128GCM, A192GCM, A256GCM
+
+
+
+=back
+
+
+
+
+
+
+
+JWE key management algorithms (1.19.9):
+
+=over
+
+
+
+
+=item *
+
+A128KW, A192KW, A256KW
+
+
+
+=item *
+
+A128GCMKW, A192GCMKW, A256GCMKW
+
+
+
+=item *
+
+dirE<mdash>direct use of a shared symmetric key as the content encryption key
+
+
+
+=back
+
 
 
 
@@ -210,6 +284,18 @@ and the result was undefined for arrays.
 
 
 
+B<NOTE>
+
+Variable values for tokens encrypted with JWE
+are available only after decryption which occurs during the
+L<Access|development_guide> phase.
+
+
+
+
+
+
+
 
 =head2 auth_jwt_header_set
 
@@ -308,6 +394,7 @@ Allows retrieving a
 L<JSON Web Key Set|https://tools.ietf.org/html/rfc7517#section-5>
 file from a subrequest for validating JWT signature and
 sets the URI where the subrequest will be sent to.
+Parameter value can contain variables.
 To avoid validation overhead,
 it is recommended to cache the key file:
 
@@ -375,6 +462,44 @@ JWT claims.
 
 
 
+=head2 auth_jwt_type
+
+
+B<syntax:> auth_jwt_type I<I<C<signed>> E<verbar> I<C<encrypted>>>
+
+
+B<default:> I<signed>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+B<context:> I<limit_except>
+
+
+
+This directive appeared in version 1.19.7.
+
+
+
+
+
+Specifies which type of JSON Web Token to expect:
+JWS (C<signed>) or
+JWE (C<encrypted>).
+
+
+
+
+
+
+
 =head1 Embedded Variables
 
 
@@ -413,6 +538,14 @@ L<JWT claim|https://tools.ietf.org/html/rfc7519#section-4>
 For nested claims and claims including a dot (“.”),
 the value of the variable cannot be evaluated;
 the L</auth_jwt_claim_set> directive should be used instead.
+
+
+
+
+
+Variable values for tokens encrypted with JWE
+are available only after decryption which occurs during the
+L<Access|development_guide> phase.
 
 
 

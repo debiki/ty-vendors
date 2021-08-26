@@ -172,6 +172,18 @@ B<context:> I<server>
 
 
 
+
+B<NOTE>
+
+This directive is obsolete since version 1.19.7.
+The L<ngx_http_core_module>
+directive should be used instead.
+
+
+
+
+
+
 Sets the timeout of inactivity after which the connection is closed.
 
 
@@ -256,6 +268,18 @@ B<context:> I<server>
 
 
 
+
+B<NOTE>
+
+This directive is obsolete since version 1.19.7.
+The L<ngx_http_core_module>
+directive should be used instead.
+
+
+
+
+
+
 Limits the maximum size of
 an L<HPACK|https://tools.ietf.org/html/rfc7541>-compressed
 request header field.
@@ -288,6 +312,18 @@ B<context:> I<server>
 
 
 
+
+B<NOTE>
+
+This directive is obsolete since version 1.19.7.
+The L<ngx_http_core_module>
+directive should be used instead.
+
+
+
+
+
+
 Limits the maximum size of the entire request header list after
 L<HPACK|https://tools.ietf.org/html/rfc7541> decompression.
 For most requests, the default limit should be enough.
@@ -315,6 +351,18 @@ B<context:> I<server>
 
 
 This directive appeared in version 1.11.6.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is obsolete since version 1.19.7.
+The L<ngx_http_core_module>
+directive should be used instead.
+
 
 
 
@@ -471,6 +519,18 @@ B<context:> I<http>
 
 
 B<context:> I<server>
+
+
+
+
+
+
+B<NOTE>
+
+This directive is obsolete since version 1.19.7.
+The L<ngx_http_core_module>
+directive should be used instead.
+
 
 
 

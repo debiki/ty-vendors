@@ -875,7 +875,7 @@ SCGI and uwsgi protocols do not have a notion of keepalive connections.
 B<syntax:> keepalive_requests I<I<C<number>>>
 
 
-B<default:> I<100>
+B<default:> I<1000>
 
 
 B<context:> I<upstream>
@@ -900,6 +900,46 @@ Closing connections periodically is necessary to free
 per-connection memory allocations.
 Therefore, using too high maximum number of requests
 could result in excessive memory usage and not recommended.
+
+
+
+
+
+
+B<NOTE>
+
+Prior to version 1.19.10, the default value was 100.
+
+
+
+
+
+
+
+
+=head2 keepalive_time
+
+
+B<syntax:> keepalive_time I<I<C<time>>>
+
+
+B<default:> I<1h>
+
+
+B<context:> I<upstream>
+
+
+
+This directive appeared in version 1.19.10.
+
+
+
+
+
+Limits the maximum time during which
+requests can be processed through one keepalive connection.
+After this time is reached, the connection is closed
+following the subsequent request processing.
 
 
 
@@ -1366,6 +1406,7 @@ B<syntax:> sticky I<
     [C<expires=>I<C<time>>]
     [C<domain=>I<C<domain>>]
     [C<httponly>]
+    [C<samesite=>C<strict>E<verbar>C<lax>E<verbar>C<none>]
     [C<secure>]
     [C<path=>I<C<path>>]>
 
@@ -1499,13 +1540,26 @@ Adds the C<HttpOnly> attribute to the cookie (1.7.11).
 
 
 
+=item C<samesite=>C<strict> E<verbar>
+C<lax> E<verbar> C<none>
+
+
+
+
+Adds the C<SameSite> attribute to the cookie
+with one of the following values (1.19.4):
+C<Strict>,
+C<Lax>, or
+C<None>.
+
+
+
 =item C<secure>
 
 
 
 
 Adds the C<Secure> attribute to the cookie (1.7.11).
-
 
 
 

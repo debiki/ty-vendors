@@ -28,7 +28,8 @@ Microsoft Visual C compiler. Microsoft Visual Studio E<copy>
 
 =item *
 
-L<MSYS|http://www.mingw.org/wiki/MSYS>.
+L<MSYS|https://sourceforge.net/projects/mingw/files/MSYS/> or
+L<MSYS2|https://www.msys2.org>.
 
 
 
@@ -108,7 +109,7 @@ sources into lib directory:
     cd objs/lib
     tar -xzf ../../pcre-8.44.tar.gz
     tar -xzf ../../zlib-1.2.11.tar.gz
-    tar -xzf ../../openssl-1.1.1g.tar.gz
+    tar -xzf ../../openssl-1.1.1k.tar.gz
 
 
 
@@ -136,7 +137,7 @@ Run configure script:
         --with-cc-opt=-DFD_SETSIZE=1024 \
         --with-pcre=objs/lib/pcre-8.44 \
         --with-zlib=objs/lib/zlib-1.2.11 \
-        --with-openssl=objs/lib/openssl-1.1.1g \
+        --with-openssl=objs/lib/openssl-1.1.1k \
         --with-openssl-opt=no-asm \
         --with-http_ssl_module
 

@@ -620,6 +620,12 @@ used for authentication to a proxied server.
 
 
 
+Since version 1.21.0, variables can be used in the I<C<file>> name.
+
+
+
+
+
 
 
 =head2 proxy_ssl_certificate_key
@@ -640,6 +646,12 @@ B<context:> I<server>
 
 Specifies a I<C<file>> with the secret key in the PEM format
 used for authentication to a proxied server.
+
+
+
+
+
+Since version 1.21.0, variables can be used in the I<C<file>> name.
 
 
 

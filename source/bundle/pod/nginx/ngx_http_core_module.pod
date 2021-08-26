@@ -673,10 +673,7 @@ B<context:> I<location>
 
 
 
-Sets the maximum allowed size of the client request body,
-specified in the
-C<Content-Length>
-request header field.
+Sets the maximum allowed size of the client request body.
 If the size in a request exceeds the configured value, the
 C<413> (C<Request Entity Too Large>)
 error is returned to the client.
@@ -1453,7 +1450,7 @@ keep-alive connections with them were disabled by default.
 B<syntax:> keepalive_requests I<I<C<number>>>
 
 
-B<default:> I<100>
+B<default:> I<1000>
 
 
 B<context:> I<http>
@@ -1484,6 +1481,52 @@ Closing connections periodically is necessary to free
 per-connection memory allocations.
 Therefore, using too high maximum number of requests
 could result in excessive memory usage and not recommended.
+
+
+
+
+
+
+B<NOTE>
+
+Prior to version 1.19.10, the default value was 100.
+
+
+
+
+
+
+
+
+=head2 keepalive_time
+
+
+B<syntax:> keepalive_time I<I<C<time>>>
+
+
+B<default:> I<1h>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.19.10.
+
+
+
+
+
+Limits the maximum time during which
+requests can be processed through one keep-alive connection.
+After this time is reached, the connection is closed
+following the subsequent request processing.
 
 
 
@@ -2229,9 +2272,11 @@ will C<bind> only to C<*:>I<C<port>>.
 It should be noted that the C<getsockname> system call will be
 made in this case to determine the address that accepted the connection.
 If the C<setfib>,
+C<fastopen>,
 C<backlog>, C<rcvbuf>,
 C<sndbuf>, C<accept_filter>,
 C<deferred>, C<ipv6only>,
+C<reuseport>,
 or C<so_keepalive> parameters
 are used then for a given
 I<C<address>>:I<C<port>> pair
@@ -4652,6 +4697,15 @@ connection serial number (1.3.8, 1.2.5)
 
 
 current number of requests made through a connection (1.3.8, 1.2.5)
+
+
+
+=item C<$connection_time>
+
+
+
+
+connection time in seconds with a milliseconds resolution (1.19.10)
 
 
 

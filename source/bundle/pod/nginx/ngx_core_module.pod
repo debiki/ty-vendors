@@ -674,7 +674,7 @@ This directive appeared in version 1.7.11.
 
 
 
-Defines named thread pools
+Defines the I<C<name>> and parameters of a thread pool
 used for multi-threaded reading and sending of files
 L<without blocking|ngx_http_core_module>
 worker processes.

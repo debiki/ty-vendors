@@ -990,6 +990,19 @@ load balancing method.
 
 
 =item 
+C<--without-http_upstream_random_module>
+
+
+
+
+
+disables building a module that implements the
+L<ngx_http_upstream_module>
+load balancing method.
+
+
+
+=item 
 C<--without-http_upstream_keepalive_module>
 
 
@@ -1482,6 +1495,19 @@ and then closes the connection.
 
 
 =item 
+C<--without-stream_set_module>
+
+
+
+
+
+disables building the
+L<ngx_stream_set_module|ngx_stream_set_module>
+module that sets a value for a variable.
+
+
+
+=item 
 C<--without-stream_upstream_hash_module>
 
 
@@ -1496,6 +1522,19 @@ load balancing method.
 
 =item 
 C<--without-stream_upstream_least_conn_module>
+
+
+
+
+
+disables building a module that implements the
+L<ngx_stream_upstream_module>
+load balancing method.
+
+
+
+=item 
+C<--without-stream_upstream_random_module>
 
 
 

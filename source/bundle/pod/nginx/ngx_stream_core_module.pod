@@ -82,6 +82,7 @@ B<syntax:> listen I<
     [C<ssl>]
     [C<udp>]
     [C<proxy_protocol>]
+    [C<fastopen>=I<C<number>>]
     [C<backlog>=I<C<number>>]
     [C<rcvbuf>=I<C<size>>]
     [C<sndbuf>=I<C<size>>]
@@ -181,6 +182,29 @@ can have several additional parameters specific to socket-related system calls.
 
 
 =item 
+C<fastopen>=I<C<number>>
+
+
+
+
+
+enables
+“L<TCP Fast Open|http://en.wikipedia.org/wiki/TCP_Fast_Open>”
+for the listening socket (1.21.0) and
+L<limits|https://tools.ietf.org/html/rfc7413#section-5.1>
+the maximum length for the queue of connections that have not yet completed
+the three-way handshake.
+
+B<NOTE>
+
+Do not enable this feature unless the server can handle
+receiving the
+L<same SYN packet with data|https://tools.ietf.org/html/rfc7413#section-6.1> more than once.
+
+
+
+
+=item 
 C<backlog>=I<C<number>>
 
 
@@ -236,7 +260,9 @@ for the given port (C<*:>I<C<port>>), nginx will
 C<bind> only to C<*:>I<C<port>>.
 It should be noted that the C<getsockname> system call will be
 made in this case to determine the address that accepted the connection.
-If the C<ipv6only>
+If the C<backlog>,
+C<rcvbuf>, C<sndbuf>,
+C<ipv6only>, C<reuseport>,
 or C<so_keepalive> parameters
 are used then for a given
 I<C<address>>:I<C<port>> pair
