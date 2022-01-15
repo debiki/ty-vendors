@@ -8,7 +8,7 @@ This package contains type definitions for markdown-it (https://github.com/markd
 Files were exported from https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/markdown-it.
 
 ### Additional Details
- * Last updated: Fri, 27 Aug 2021 09:31:22 GMT
+ * Last updated: Thu, 07 Oct 2021 19:01:21 GMT
  * Dependencies: [@types/linkify-it](https://npmjs.com/package/@types/linkify-it), [@types/mdurl](https://npmjs.com/package/@types/mdurl)
  * Global values: `markdownit`
 

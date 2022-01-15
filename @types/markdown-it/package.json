@@ -1,6 +1,6 @@
 {
     "name": "@types/markdown-it",
-    "version": "12.2.1",
+    "version": "12.2.3",
     "description": "TypeScript definitions for markdown-it",
     "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/markdown-it",
     "license": "MIT",
@@ -36,9 +36,8 @@
     "scripts": {},
     "dependencies": {
         "@types/linkify-it": "*",
-        "@types/mdurl": "*",
-        "highlight.js": "^10.7.2"
+        "@types/mdurl": "*"
     },
-    "typesPublisherContentHash": "0327d5581a0f1e86182ef0a4d8fe9c7b6df12209a125cb71e55c9ede8c8a1afe",
+    "typesPublisherContentHash": "36f0d70c931d35e9b42ff42d3fcfdf021860abdb23b8a6310e8db0afd2395a15",
     "typeScriptVersion": "3.7"
 }
