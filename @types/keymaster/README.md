@@ -2,15 +2,17 @@
 > `npm install --save @types/keymaster`
 
 # Summary
-This package contains type definitions for keymaster (https://github.com/madrobby/keymaster).
+This package contains type definitions for keymaster v1.6.2 (https://github.com/madrobby/keymaster).
 
 # Details
-Files were exported from https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/keymaster.
+Files were exported from https://www.github.com/DefinitelyTyped/DefinitelyTyped/tree/types-2.0/keymaster
 
-### Additional Details
- * Last updated: Thu, 13 May 2021 21:01:28 GMT
- * Dependencies: none
- * Global values: `key`
+Additional Details
+ * Last updated: Mon, 19 Sep 2016 17:28:59 GMT
+ * File structure: Mixed
+ * Library Dependencies: none
+ * Module Dependencies: none
+ * Global values: key
 
 # Credits
-These definitions were written by [Martin W. Kirst](https://github.com/nitram509), and [BendingBender](https://github.com/BendingBender).
+These definitions were written by Martin W. Kirst <https://github.com/nitram509>.

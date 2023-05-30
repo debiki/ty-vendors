@@ -8,7 +8,7 @@
   "topLevelPatterns": [
     "@types/assert@^1.5.6",
     "@types/core-js@^2.5.5",
-    "@types/keymaster@1.6.30",
+    "@types/keymaster@1.6.28",
     "@types/lodash@^4.14.194",
     "@types/markdown-it@^12.2.3",
     "@types/minimist@^1.2.2",
@@ -91,7 +91,7 @@
     "@types/expect@^1.20.4": "https://registry.yarnpkg.com/@types/expect/-/expect-1.20.4.tgz#8288e51737bf7e3ab5d7c77bfa695883745264e5",
     "@types/form-data@0.0.33": "https://registry.yarnpkg.com/@types/form-data/-/form-data-0.0.33.tgz#c9ac85b2a5fd18435b8c85d9ecb50e6d6c893ff8",
     "@types/glob@^7.1.1": "https://registry.yarnpkg.com/@types/glob/-/glob-7.1.1.tgz#aa59a1c6e3fbc421e07ccd31a944c30eba521575",
-    "@types/keymaster@1.6.30": "https://registry.yarnpkg.com/@types/keymaster/-/keymaster-1.6.30.tgz#11c3d8b9cb05f207816b77b9621afc6ec8ad01be",
+    "@types/keymaster@1.6.28": "https://registry.yarnpkg.com/@types/keymaster/-/keymaster-1.6.28.tgz#093fc6fe49deff4ee17d36935a49230edb1c935f",
     "@types/linkify-it@*": "https://registry.yarnpkg.com/@types/linkify-it/-/linkify-it-3.0.0.tgz#c0ca4c253664492dbf47a646f31cfd483a6bbc95",
     "@types/lodash@^4.14.194": "https://registry.yarnpkg.com/@types/lodash/-/lodash-4.14.194.tgz#b71eb6f7a0ff11bff59fc987134a093029258a76",
     "@types/markdown-it@^12.2.3": "https://registry.yarnpkg.com/@types/markdown-it/-/markdown-it-12.2.3.tgz#0d6f6e5e413f8daaa26522904597be3d6cd93b51",
