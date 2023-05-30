@@ -1,7 +1,7 @@
 {
   "name": "gulp-preprocess",
   "description": "Gulp plugin to preprocess HTML, JavaScript, and other files based on custom context or environment configuration",
-  "version": "3.0.3",
+  "version": "4.0.2",
   "homepage": "http://github.com/pioug/gulp-preprocess",
   "repository": {
     "type": "git",
@@ -11,18 +11,18 @@
   "main": "./index.js",
   "dependencies": {
     "lodash": "^4.17.15",
-    "map-stream": "^0.1.x",
-    "preprocess": "^3.0.0"
+    "preprocess": "^3.0.0",
+    "through2": "^4.0.2"
   },
   "devDependencies": {
-    "eslint": "^6.3.0",
-    "mocha": "^6.2.0",
-    "prettier": "^1.16.4",
+    "eslint": "7.24.0",
+    "mocha": "^8.3.2",
+    "prettier": "^2.2.1",
     "should": "^13.2.3",
     "vinyl": "^2.2.0"
   },
   "engines": {
-    "node": ">= 6.14.3"
+    "node": ">= 14"
   },
   "scripts": {
     "test": "mocha --reporter spec"

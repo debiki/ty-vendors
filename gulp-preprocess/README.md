@@ -1,4 +1,4 @@
-# gulp-preprocess [![NPM version](https://img.shields.io/npm/v/gulp-preprocess.svg)](https://www.npmjs.com/package/gulp-preprocess) [![Build Status](https://img.shields.io/travis/pioug/gulp-preprocess.svg)](https://travis-ci.org/pioug/gulp-preprocess) [![Dependency Status](https://img.shields.io/david/pioug/gulp-preprocess.svg)](https://david-dm.org/pioug/gulp-preprocess)
+# gulp-preprocess [![NPM version](https://img.shields.io/npm/v/gulp-preprocess.svg)](https://www.npmjs.com/package/gulp-preprocess) [![Run tests](https://github.com/nfroidure/svg-pathdata/actions/workflows/test.yml/badge.svg)](https://github.com/nfroidure/svg-pathdata/actions/workflows/test.yml) [![Dependency Status](https://img.shields.io/david/pioug/gulp-preprocess.svg)](https://david-dm.org/pioug/gulp-preprocess)
 
 > [Gulp](http://gulpjs.com) plugin to preprocess HTML, JavaScript, and other files based on custom context or environment configuration
 
@@ -10,11 +10,11 @@
 </tr>
 <tr>
 <td>Node Version</td>
-<td>>= 6.14.3</td>
+<td>>= 14</td>
 </tr>
 <tr>
 <td>Gulp Version</td>
-<td>3.x</td>
+<td>>= 4</td>
 </tr>
 </table>
 
@@ -33,18 +33,15 @@ npm install gulp-preprocess --save-dev
 ```js
 var preprocess = require("gulp-preprocess");
 
-gulp.task("html", function() {
+gulp.task("html", function () {
   gulp
     .src("./app/*.html")
     .pipe(preprocess({ context: { NODE_ENV: "production", DEBUG: true } })) // To set environment variables in-line
     .pipe(gulp.dest("./dist/"));
 });
 
-gulp.task("scripts", function() {
-  gulp
-    .src(["./app/*.js"])
-    .pipe(preprocess())
-    .pipe(gulp.dest("./dist/"));
+gulp.task("scripts", function () {
+  gulp.src(["./app/*.js"]).pipe(preprocess()).pipe(gulp.dest("./dist/"));
 });
 ```
 
@@ -52,7 +49,7 @@ gulp.task("scripts", function() {
 
 ```html
 <head>
-  <title>Your App
+  <title>Your App</title>
 
   <!-- @if NODE_ENV='production' -->
   <script src="some/production/lib/like/analytics.js"></script>
