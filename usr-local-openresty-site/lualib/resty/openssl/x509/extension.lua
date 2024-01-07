@@ -13,9 +13,9 @@ require "resty.openssl.include.conf"
 local asn1_macro = require("resty.openssl.include.asn1")
 local objects_lib = require "resty.openssl.objects"
 local stack_lib = require("resty.openssl.stack")
-local util = require "resty.openssl.util"
+local bio_util = require "resty.openssl.auxiliary.bio"
 local format_error = require("resty.openssl.err").format_error
-local BORINGSSL = require("resty.openssl.version").BORINGSSL
+local OPENSSL_3X = require("resty.openssl.version").OPENSSL_3X
 
 local _M = {}
 local mt = { __index = _M }
@@ -29,22 +29,19 @@ local extension_types = {
   crl     = "resty.openssl.x509.crl",
 }
 
-local nconf_load
-if BORINGSSL then
-  nconf_load = function()
-    return nil, "NCONF_load_bio not exported in BoringSSL"
-  end
-else
-  nconf_load = function(conf, str)
-    local bio = C.BIO_new_mem_buf(str, #str)
-    if bio == nil then
-      return format_error("BIO_new_mem_buf")
-    end
-    ffi_gc(bio, C.BIO_free)
+if OPENSSL_3X then
+  extension_types["issuer_pkey"] = "resty.openssl.pkey"
+end
 
-    if C.NCONF_load_bio(conf, bio, nil) ~= 1 then
-      return format_error("NCONF_load_bio")
-    end
+local nconf_load = function(conf, str)
+  local bio = C.BIO_new_mem_buf(str, #str)
+  if bio == nil then
+    return format_error("BIO_new_mem_buf")
+  end
+  ffi_gc(bio, C.BIO_free)
+
+  if C.NCONF_load_bio(conf, bio, nil) ~= 1 then
+    return format_error("NCONF_load_bio")
   end
 end
 
@@ -87,6 +84,13 @@ function _M.new(txtnid, value, data)
       end
     end
     C.X509V3_set_ctx(x509_ctx_ptr[0], args.issuer, args.subject, args.request, args.crl, 0)
+
+    if OPENSSL_3X and args.issuer_pkey then
+      if C.X509V3_set_issuer_pkey(x509_ctx_ptr[0], args.issuer_pkey) ~= 1 then
+        return nil, format_error("x509.extension.new: X509V3_set_issuer_pkey")
+      end
+    end
+
   elseif type(data) == 'string' then
     err = nconf_load(conf, data)
     if err then
@@ -246,13 +250,13 @@ function _M:set_critical(crit)
 end
 
 function _M:tostring()
-  local ret, err = util.read_using_bio(C.X509V3_EXT_print, self.ctx, 0, 0)
+  local ret, err = bio_util.read_wrap(C.X509V3_EXT_print, self.ctx, 0, 0)
   if not err then
     return ret
   end
   -- fallback to ASN.1 print
   local asn1 = C.X509_EXTENSION_get_data(self.ctx)
-  return util.read_using_bio(C.ASN1_STRING_print, asn1)
+  return bio_util.read_wrap(C.ASN1_STRING_print, asn1)
 end
 
 _M.text = _M.tostring

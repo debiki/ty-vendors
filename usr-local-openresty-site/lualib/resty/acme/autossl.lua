@@ -5,7 +5,7 @@ local openssl = require "resty.acme.openssl"
 local json = require "cjson"
 local ssl = require "ngx.ssl"
 
-local log = ngx.log
+local log = util.log
 local ngx_ERR = ngx.ERR
 local ngx_WARN = ngx.WARN
 local ngx_INFO = ngx.INFO
@@ -38,6 +38,10 @@ local default_config = {
   domain_whitelist = nil,
   -- restrict registering new cert only with domain checked by this function
   domain_whitelist_callback = nil,
+  -- certificate failure cooloff period, in seconds
+  failure_cooloff = 300,
+  -- certificate failure cooloff function, receives domain name and attempt count, should return cooloff period in seconds
+  failure_cooloff_callback = nil,
   -- the threshold to renew a cert before it expires, in seconds
   renew_threshold = 7 * 86400,
   -- interval to check cert renewal, in seconds
@@ -52,12 +56,15 @@ local default_config = {
   enabled_challenge_handlers = { 'http-01' },
   -- time to wait before signaling ACME server to validate in seconds
   challenge_start_delay = 0,
+  -- if true, the request to nginx waits until the cert has been generated and it is used right away
+  blocking = false,
 }
 
 local domain_pkeys = {}
 
 local domain_key_types, domain_key_types_count
 local domain_whitelist, domain_whitelist_callback
+local failure_cooloff_callback
 
 --[[
   certs_cache = {
@@ -69,11 +76,27 @@ local domain_whitelist, domain_whitelist_callback
 local certs_cache = {}
 local CERTS_CACHE_TTL = 3600
 local CERTS_CACHE_NEG_TTL = 5
+local CERTS_LOCK_TTL = 300
 
 
 local update_cert_lock_key_prefix = "update_lock:"
 local domain_cache_key_prefix = "domain:"
 local account_private_key_prefix = "account_key:"
+local certificate_failure_lock_key_prefix = "failure_lock:"
+local certificate_failure_count_prefix = "failed_attempts:"
+
+local reserved_words_re = table.concat({
+  update_cert_lock_key_prefix,
+  domain_cache_key_prefix,
+  account_private_key_prefix,
+  certificate_failure_lock_key_prefix,
+  certificate_failure_count_prefix,
+}, '|')
+reserved_words_re = "^(" .. reserved_words_re .. ")"
+
+function AUTOSSL.get_cert_from_cache(domain, typ)
+  return certs_cache[typ]:get(domain)
+end
 
 -- get cert from storage
 local function get_certkey(domain, typ)
@@ -96,7 +119,7 @@ end
 
 -- get cert and key cdata with caching
 local function get_certkey_parsed(domain, typ)
-  local data, _ --[[stale]], _ --[[flags]] = certs_cache[typ]:get(domain)
+  local data, data_staled, _ --[[flags]] = AUTOSSL.get_cert_from_cache(domain, typ)
 
   if data then
     return data, nil
@@ -134,6 +157,9 @@ local function get_certkey_parsed(domain, typ)
   -- fill in local cache
   if cache then
     certs_cache[typ]:set(domain, cache, CERTS_CACHE_TTL)
+  elseif err_ret and data_staled then
+    log(ngx_WARN, err_ret, ", serving staled cert for ", domain)
+    return data_staled, nil
   else
     certs_cache[typ]:set(domain, null, CERTS_CACHE_NEG_TTL)
   end
@@ -198,6 +224,14 @@ local function update_cert_handler(data)
 
   log(ngx_INFO, "new ", typ, " cert for ", domain, " is saved")
 
+  local lock_key = update_cert_lock_key_prefix .. domain
+  local err = AUTOSSL.storage:delete(lock_key)
+  if err then
+    log(ngx.WARN,
+      "unable to delete lock key ", lock_key, ": ", err,
+      ", certs for other type may be blocked until lock expired")
+  end
+
 end
 
 -- locked wrapper for update_cert_handler
@@ -220,44 +254,65 @@ function AUTOSSL.update_cert(data)
     return "cert update is not allowed for domain " .. data.domain
   end
 
+
+  -- If its failed in the past and its still cooling down
+  -- we dont do anything right now
+  local failure_lock_key = certificate_failure_lock_key_prefix .. data.domain
+  local failure_lock, _ = AUTOSSL.storage:get(failure_lock_key)
+  if failure_lock then
+    local now = ngx.now()
+    local remaining = failure_lock - now
+    ngx.log(ngx.INFO, "failure lock key exists for another ", remaining, " seconds. Not updating ", data.domain, " right now")
+    return nil
+  end
+
   -- Note that we lock regardless of key types
   -- Let's encrypt tends to have a (undocumented?) behaviour that if
   -- you submit an order with different CSR while the previous order is still pending
   -- you will get the previous order (with `expires` capped to an integer second).
-  local lock_key = update_cert_lock_key_prefix .. ":" .. data.domain
-  local err = AUTOSSL.storage:add(lock_key, "1", CERTS_CACHE_NEG_TTL)
+  local lock_key = update_cert_lock_key_prefix .. data.domain
+  local err = AUTOSSL.storage:add(lock_key, "1", CERTS_LOCK_TTL)
   if err then
-    ngx.log(ngx.INFO,
+    log(ngx.INFO,
       "update is already running (lock key ", lock_key, " exists), current type ", data.type)
     return nil
   end
 
   err = update_cert_handler(data)
 
+  local failure_count_key = certificate_failure_count_prefix .. data.domain
+  if err then
+    local count_storage, _ = AUTOSSL.storage:get(failure_count_key)
+    local count = (count_storage or 0) + 1
+    AUTOSSL.storage:set(failure_count_key, count)
+    local cooloff = AUTOSSL.config.failure_cooloff
+    if failure_cooloff_callback then
+      cooloff = failure_cooloff_callback(data.domain, count)
+    end
+    local now = ngx.now()
+    AUTOSSL.storage:add(failure_lock_key, now + cooloff, cooloff)
+  else
+    AUTOSSL.storage:set(failure_count_key, 0)
+  end
+
   -- yes we don't release lock, but wait it to expire after negative cache is cleared
   return err
 end
 
-function AUTOSSL.check_renew()
-  local now = ngx.now()
-  local interval = AUTOSSL.config.renew_check_interval
+function AUTOSSL.check_renew(premature)
 
-  log(ngx_INFO, "AUTOSSL.check_renew(): When is the time? Now: ", now,
-        ", interval: ", interval,
-        ", ngx.worker.count(): ", ngx.worker.count(),
-        ", id(): ", ngx.worker.id())
-  log(ngx_INFO, "(now - now % interval): ",
-                 (now - now % interval))
-  log(ngx_INFO, "(now - now % interval) / interval): ",
-                 (now - now % interval) / interval)
-  log(ngx_INFO, "((now - now % interval) / interval) % ngx.worker.count(): ",
-                 ((now - now % interval) / interval) % ngx.worker.count())
-
-  if ((now - now % interval) / interval) % ngx.worker.count() ~= ngx.worker.id() then
-    log(ngx_INFO, "AUTOSSL.check_renew(): Now is not the time.")
+  -- According to docs in https://github.com/openresty/lua-nginx-module#ngxtimerat, a premature
+  -- timer expiration occurs when the nginx worker is trying to shut down. Here we are skipping
+  -- running this on Nginx worker shutdown, as it can be problematic
+  if premature then
     return
   end
-  log(ngx_INFO, "AUTOSSL.check_renew(): Doing now ...")
+
+  local now = ngx.now()
+  local interval = AUTOSSL.config.renew_check_interval
+  if ((now - now % interval) / interval) % ngx.worker.count() ~= ngx.worker.id() then
+    return
+  end
 
   local keys = AUTOSSL.storage:list(domain_cache_key_prefix)
   for _, key in ipairs(keys) do
@@ -293,8 +348,6 @@ function AUTOSSL.check_renew()
 
 ::continue::
   end
-
-  log(ngx_INFO, "AUTOSSL.check_renew(): ... Done.")
 end
 
 function AUTOSSL.init(autossl_config, acme_config)
@@ -314,6 +367,19 @@ function AUTOSSL.init(autossl_config, acme_config)
 
   acme_config.storage_adapter = autossl_config.storage_adapter
   acme_config.storage_config = autossl_config.storage_config
+
+  if acme_config.storage_adapter == "resty.acme.storage.redis" and
+    acme_config.storage_config.namespace then
+    local namespace = acme_config.storage_config.namespace
+    local m, err = ngx.re.match(namespace, reserved_words_re, "jo")
+    if err then
+      error("error during ngx.re.match: " .. err)
+    end
+
+    if m then
+      error("namespace can't be prefixed with reserved word: " .. m[0])
+    end
+  end
 
   if autossl_config.account_key_path then
     acme_config.account_key = AUTOSSL.load_account_key(autossl_config.account_key_path)
@@ -350,8 +416,18 @@ function AUTOSSL.init(autossl_config, acme_config)
   end
 
   if not domain_whitelist and not domain_whitelist_callback then
-    ngx.log(ngx.WARN, "neither domain_whitelist or domain_whitelist_callback is defined, this may cause",
+    log(ngx.WARN, "neither domain_whitelist or domain_whitelist_callback is defined, this may cause",
                       "security issues as all SNI will trigger a creation of certificate")
+  end
+
+  failure_cooloff_callback = autossl_config.failure_cooloff_callback
+  if failure_cooloff_callback and type(failure_cooloff_callback) ~= "function" then
+    error("failure_cooloff_callback must be a function, got " .. type(failure_cooloff_callback))
+  end
+
+  if not autossl_config.failure_cooloff and not failure_cooloff_callback then
+    ngx.log(ngx.WARN, "neither failure_cooloff or failure_cooloff_callback is defined, ",
+                      "any certificate failure will not cooloff which may trigger ACME API limits")
   end
 
   for _, typ in ipairs(domain_key_types) do
@@ -404,9 +480,6 @@ function AUTOSSL.init_worker()
     end
   end
 
-  log(ngx_INFO, "Scheduling AUTOSSL.check_renew every ",
-          AUTOSSL.config.renew_check_interval, " seconds")
-
   ngx.timer.every(AUTOSSL.config.renew_check_interval, AUTOSSL.check_renew)
 end
 
@@ -446,7 +519,7 @@ function AUTOSSL.ssl_certificate()
   local chains_set_count = 0
   local chains_set = {}
 
-  for i, typ in ipairs(domain_key_types) do
+  local get_cert_inline = function(i, typ)
     local certkey, err = get_certkey_parsed(domain, typ)
     if err then
       log(ngx_ERR, "can't read key and cert from storage ", err)
@@ -465,8 +538,12 @@ function AUTOSSL.ssl_certificate()
     end
   end
 
+  for i, typ in ipairs(domain_key_types) do
+    get_cert_inline(i, typ)
+  end
+
   if domain_key_types_count ~= chains_set then
-    ngx.timer.at(0, function()
+    local update_cert_loop = function()
       for i, typ in ipairs(domain_key_types) do
         if not chains_set[i] then
           local err = AUTOSSL.update_cert({
@@ -478,12 +555,20 @@ function AUTOSSL.ssl_certificate()
 
           if err then
             log(ngx_ERR, "failed to create ", typ, " certificate for domain ", domain, ": ", err)
+          elseif AUTOSSL.config.blocking then
+            -- in blocking mode we can try to use the cert right away
+            certs_cache[typ]:delete(domain)
+            get_cert_inline(i, typ)
           end
         end
       end
-    end)
-    -- serve fallback cert this time
-    return
+    end
+
+    if AUTOSSL.config.blocking then
+      update_cert_loop()
+    else
+      ngx.timer.at(0, update_cert_loop)
+    end
   end
 end
 

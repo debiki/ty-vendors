@@ -5,15 +5,16 @@ local ffi_new = ffi.new
 local ffi_str = ffi.string
 local ffi_cast = ffi.cast
 local ffi_copy = ffi.copy
-local null = ngx.null
 
 local rsa_macro = require "resty.openssl.include.rsa"
 local dh_macro = require "resty.openssl.include.dh"
 require "resty.openssl.include.bio"
 require "resty.openssl.include.pem"
 require "resty.openssl.include.x509"
+require "resty.openssl.include.evp.pkey"
 local evp_macro = require "resty.openssl.include.evp"
-local util = require "resty.openssl.util"
+local pkey_macro = require "resty.openssl.include.evp.pkey"
+local bio_util = require "resty.openssl.auxiliary.bio"
 local digest_lib = require "resty.openssl.digest"
 local rsa_lib = require "resty.openssl.rsa"
 local dh_lib = require "resty.openssl.dh"
@@ -21,18 +22,37 @@ local ec_lib = require "resty.openssl.ec"
 local ecx_lib = require "resty.openssl.ecx"
 local objects_lib = require "resty.openssl.objects"
 local jwk_lib = require "resty.openssl.auxiliary.jwk"
+local ctx_lib = require "resty.openssl.ctx"
 local ctypes = require "resty.openssl.auxiliary.ctypes"
+local ecdsa_util = require "resty.openssl.auxiliary.ecdsa"
 local format_error = require("resty.openssl.err").format_error
+local log_warn = require "resty.openssl.auxiliary.compat".log_warn
+local log_debug = require "resty.openssl.auxiliary.compat".log_debug
 
-local OPENSSL_11_OR_LATER = require("resty.openssl.version").OPENSSL_11_OR_LATER
-local OPENSSL_111_OR_LATER = require("resty.openssl.version").OPENSSL_111_OR_LATER
-local BORINGSSL = require("resty.openssl.version").BORINGSSL
+local OPENSSL_3X = require("resty.openssl.version").OPENSSL_3X
 
 local ptr_of_uint = ctypes.ptr_of_uint
 local ptr_of_size_t = ctypes.ptr_of_size_t
+local ptr_of_int = ctypes.ptr_of_int
 
+local null = ctypes.null
 local load_pem_args = { null, null, null }
 local load_der_args = { null }
+
+local get_pkey_key = {
+  [evp_macro.EVP_PKEY_RSA] = function(ctx) return C.EVP_PKEY_get0_RSA(ctx) end,
+  [evp_macro.EVP_PKEY_EC] = function(ctx) return C.EVP_PKEY_get0_EC_KEY(ctx) end,
+  [evp_macro.EVP_PKEY_DH]  = function(ctx) return C.EVP_PKEY_get0_DH(ctx) end
+}
+
+local load_rsa_key_funcs
+
+if not OPENSSL_3X then
+  load_rsa_key_funcs= {
+    ['PEM_read_bio_RSAPrivateKey'] = true,
+    ['PEM_read_bio_RSAPublicKey'] = true,
+  } -- those functions return RSA* instead of EVP_PKEY*
+end
 
 local function load_pem_der(txt, opts, funcs)
   local fmt = opts.format or '*'
@@ -49,7 +69,7 @@ local function load_pem_der(txt, opts, funcs)
     return nil, "explictly load private or public key from JWK format is not supported"
   end
 
-  ngx.log(ngx.DEBUG, "load key using fmt: ", fmt, ", type: ", typ)
+  log_debug("load key using fmt: ", fmt, ", type: ", typ)
 
   local bio = C.BIO_new_mem_buf(txt, #txt)
   if bio == nil then
@@ -71,7 +91,7 @@ local function load_pem_der(txt, opts, funcs)
         if fmt == "JWK" then
           return nil, err
         end
-        ngx.log(ngx.DEBUG, "jwk decode failed: ", err, ", continuing")
+        log_debug("jwk decode failed: ", err, ", continuing")
       end
     else
       -- #define BIO_CTRL_RESET 1
@@ -85,6 +105,8 @@ local function load_pem_der(txt, opts, funcs)
         if opts.passphrase then
           local passphrase = opts.passphrase
           if type(passphrase) ~= "string" then
+            -- clear errors occur when trying
+            C.ERR_clear_error()
             return nil, "passphrase must be a string"
           end
           arg = { null, nil, passphrase }
@@ -93,7 +115,7 @@ local function load_pem_der(txt, opts, funcs)
             local p = opts.passphrase_cb()
             local len = #p -- 1 byte for \0
             if len > size then
-              ngx.log(ngx.WARN, "pkey:load_pem_der: passphrase truncated from ", len, " to ", size)
+              log_warn("pkey:load_pem_der: passphrase truncated from ", len, " to ", size)
               len = size
             end
             ffi_copy(buf, p, len)
@@ -107,7 +129,24 @@ local function load_pem_der(txt, opts, funcs)
     end
 
     if ctx ~= nil then
-      ngx.log(ngx.DEBUG, "pkey:load_pem_der: loaded pkey using function ", f)
+      log_debug("pkey:load_pem_der: loaded pkey using function ", f)
+
+      -- pkcs1 functions create a rsa rather than evp_pkey
+      -- disable the checking in openssl 3.0 for sail safe
+      if not OPENSSL_3X and load_rsa_key_funcs[f] then
+        local rsa = ctx
+        ctx = C.EVP_PKEY_new()
+        if ctx == null then
+          return nil, format_error("pkey:load_pem_der: EVP_PKEY_new")
+        end
+
+        if C.EVP_PKEY_assign(ctx, evp_macro.EVP_PKEY_RSA, rsa) ~= 1 then
+          C.RSA_free(rsa)
+          C.EVP_PKEY_free(ctx)
+          return nil, "pkey:load_pem_der: EVP_PKEY_assign() failed"
+        end
+      end
+
       break
     end
   end
@@ -122,6 +161,40 @@ local function load_pem_der(txt, opts, funcs)
   C.ERR_clear_error()
   return ctx, nil
 end
+
+local function _pctx_ctrl_str(pctx, opts)
+  if not opts then
+    return true
+  end
+
+  if opts.mgf1_md and pkey_macro.EVP_PKEY_CTX_set_rsa_mgf1_md_name(pctx, opts.mgf1_md, nil) ~= 1 then
+    return nil, format_error("EVP_PKEY_CTX_set_rsa_mgf1_md_name")
+  end
+
+  if opts.oaep_md and pkey_macro.EVP_PKEY_CTX_set_rsa_oaep_md_name(pctx, opts.oaep_md, nil) ~= 1 then
+    return nil, format_error("EVP_PKEY_CTX_set_rsa_oaep_md_name")
+  end
+
+  if opts.pss_saltlen and pkey_macro.EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx, opts.pss_saltlen) ~= 1 then
+    return nil, format_error("EVP_PKEY_CTX_set_rsa_pss_saltlen")
+  end
+
+
+  for _, c in ipairs(opts) do
+    if type(c) == "string" then
+      local k, v = string.match(c, "([_%w]+):([_%w]+)")
+      if not k or not v then
+        return nil, "unknown ctrl str: ".. c
+      end
+
+      if C.EVP_PKEY_CTX_ctrl_str(pctx, k, v) ~= 1 then
+        return nil, format_error(string.format('EVP_PKEY_CTX_ctrl_str(%s, "%s", "%s")', pctx, k, v))
+      end
+    end
+  end
+  return true
+end
+
 
 local function generate_param(key_type, config)
   if key_type == evp_macro.EVP_PKEY_DH then
@@ -163,29 +236,31 @@ local function generate_param(key_type, config)
     if nid == 0 then
       return nil, "unknown curve " .. curve
     end
-    if evp_macro.EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, nid) <= 0 then
+
+    if pkey_macro.EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, nid) <= 0 then
       return nil, format_error("EVP_PKEY_CTX_ctrl: EC: curve_nid")
     end
-    if not BORINGSSL then
-      -- use the named-curve encoding for best backward-compatibilty
-      -- and for playing well with go:crypto/x509
-      -- # define OPENSSL_EC_NAMED_CURVE  0x001
-      if evp_macro.EVP_PKEY_CTX_set_ec_param_enc(pctx, 1) <= 0 then
-        return nil, format_error("EVP_PKEY_CTX_ctrl: EC: param_enc")
-      end
+
+    -- use the named-curve encoding for best backward-compatibilty
+    -- and for playing well with go:crypto/x509
+    -- # define OPENSSL_EC_NAMED_CURVE  0x001
+    if pkey_macro.EVP_PKEY_CTX_set_ec_param_enc(pctx, 1) <= 0 then
+      return nil, format_error("EVP_PKEY_CTX_ctrl: EC: param_enc")
     end
+
   elseif key_type == evp_macro.EVP_PKEY_DH then
     local bits = config.bits
     if not config.param and not bits then
       bits = 2048
     end
-    -- EVP_PKEY_CTX_set_dh_paramgen_prime_len
-    if bits and C.EVP_PKEY_CTX_ctrl(pctx,
-            evp_macro.EVP_PKEY_DH, evp_macro.EVP_PKEY_OP_PARAMGEN,
-            evp_macro.EVP_PKEY_CTRL_DH_PARAMGEN_PRIME_LEN,
-            bits, nil) <= 0 then
+    if bits and pkey_macro.EVP_PKEY_CTX_set_dh_paramgen_prime_len(pctx, bits) <= 0 then
       return nil, format_error("EVP_PKEY_CTX_ctrl: DH: bits")
     end
+  end
+
+  local ok, err = _pctx_ctrl_str(pctx, config)
+  if not ok then
+    return nil, "pkey:generate_param: " .. err
   end
 
   local ctx_ptr = ffi_new("EVP_PKEY*[1]")
@@ -296,7 +371,7 @@ local function generate_key(config)
       return nil, "bits out of range"
     end
 
-    if evp_macro.EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, bits) <= 0 then
+    if pkey_macro.EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, bits) <= 0 then
       return nil, format_error("EVP_PKEY_CTX_ctrl: RSA: bits")
     end
 
@@ -308,11 +383,17 @@ local function generate_key(config)
       end
       C.BN_set_word(exp, config.exp)
 
-      if evp_macro.EVP_PKEY_CTX_set_rsa_keygen_pubexp(pctx, exp) <= 0 then
+      if pkey_macro.EVP_PKEY_CTX_set_rsa_keygen_pubexp(pctx, exp) <= 0 then
         return nil, format_error("EVP_PKEY_CTX_ctrl: RSA: exp")
       end
     end
   end
+
+  local ok, err = _pctx_ctrl_str(pctx, config)
+  if not ok then
+    return nil, "pkey:generate_key: " .. err
+  end
+
   local ctx_ptr = ffi_new("EVP_PKEY*[1]")
   -- TODO: move to use EVP_PKEY_gen after drop support for <1.1.1
   if C.EVP_PKEY_keygen(pctx, ctx_ptr) ~= 1 then
@@ -322,28 +403,27 @@ local function generate_key(config)
 end
 
 local load_key_try_funcs = {} do
+  -- TODO: pkcs1 load functions are not required in openssl 3.0
   local _load_key_try_funcs = {
     PEM = {
       -- Note: make sure we always try load priv key first
       pr = {
         ['PEM_read_bio_PrivateKey'] = load_pem_args,
+        -- disable in openssl3.0, PEM_read_bio_PrivateKey can read pkcs1 in 3.0
+        ['PEM_read_bio_RSAPrivateKey'] = not OPENSSL_3X and load_pem_args or nil,
       },
       pu = {
         ['PEM_read_bio_PUBKEY'] = load_pem_args,
+        -- disable in openssl3.0, PEM_read_bio_PrivateKey can read pkcs1 in 3.0
+        ['PEM_read_bio_RSAPublicKey'] = not OPENSSL_3X and load_pem_args or nil,
       },
     },
     DER = {
-      pr = {
-        ['d2i_PrivateKey_bio'] = load_der_args,
-      },
-      pu = {
-        ['d2i_PUBKEY_bio'] = load_der_args,
-      },
+      pr = { ['d2i_PrivateKey_bio'] = load_der_args, },
+      pu = { ['d2i_PUBKEY_bio'] = load_der_args, },
     },
     JWK = {
-      pr = {
-        ['load_jwk'] = {},
-      },
+      pr = { ['load_jwk'] = {}, },
     }
   }
   -- populate * funcs
@@ -372,28 +452,52 @@ local load_key_try_funcs = {} do
   end
 end
 
-local function tostring(self, is_priv, fmt)
+local function __tostring(self, is_priv, fmt, is_pkcs1)
   if fmt == "JWK" then
     return jwk_lib.dump_jwk(self, is_priv)
+  elseif is_pkcs1 then
+    if fmt ~= "PEM" or self.key_type ~= evp_macro.EVP_PKEY_RSA then
+      return nil, "PKCS#1 format is only supported to encode RSA key in \"PEM\" format"
+    elseif OPENSSL_3X then -- maybe possible with OSSL_ENCODER_CTX_new_for_pkey though
+      return nil, "writing out RSA key in PKCS#1 format is not supported in OpenSSL 3.0"
+    end
   end
   if is_priv then
     if fmt == "DER" then
-      return util.read_using_bio(C.i2d_PrivateKey_bio, self.ctx)
+      return bio_util.read_wrap(C.i2d_PrivateKey_bio, self.ctx)
     end
-    return util.read_using_bio(C.PEM_write_bio_PrivateKey,
+    -- PEM
+    if is_pkcs1 then
+      local rsa = get_pkey_key[evp_macro.EVP_PKEY_RSA](self.ctx)
+      if rsa == nil then
+        return nil, "unable to read RSA key for writing"
+      end
+      return bio_util.read_wrap(C.PEM_write_bio_RSAPrivateKey,
+        rsa,
+        nil, nil, 0, nil, nil)
+    end
+    return bio_util.read_wrap(C.PEM_write_bio_PrivateKey,
       self.ctx,
       nil, nil, 0, nil, nil)
   else
     if fmt == "DER" then
-      return util.read_using_bio(C.i2d_PUBKEY_bio, self.ctx)
+      return bio_util.read_wrap(C.i2d_PUBKEY_bio, self.ctx)
     end
-    return util.read_using_bio(C.PEM_write_bio_PUBKEY, self.ctx)
+    -- PEM
+    if is_pkcs1 then
+      local rsa = get_pkey_key[evp_macro.EVP_PKEY_RSA](self.ctx)
+      if rsa == nil then
+        return nil, "unable to read RSA key for writing"
+      end
+      return bio_util.read_wrap(C.PEM_write_bio_RSAPublicKey, rsa)
+    end
+    return bio_util.read_wrap(C.PEM_write_bio_PUBKEY, self.ctx)
   end
 
 end
 
 local _M = {}
-local mt = { __index = _M, __tostring = tostring }
+local mt = { __index = _M, __tostring = __tostring }
 
 local empty_table = {}
 local evp_pkey_ptr_ct = ffi.typeof('EVP_PKEY*')
@@ -427,7 +531,7 @@ function _M.new(s, opts)
 
   ffi_gc(ctx, C.EVP_PKEY_free)
 
-  local key_type = C.EVP_PKEY_base_id(ctx)
+  local key_type = OPENSSL_3X and C.EVP_PKEY_get_base_id(ctx) or C.EVP_PKEY_base_id(ctx)
   if key_type == 0 then
     return nil, "pkey.new: cannot get key_type"
   end
@@ -438,12 +542,11 @@ function _M.new(s, opts)
 
   -- although OpenSSL discourages to use this size for digest/verify
   -- but this is good enough for now
-  local buf_size = C.EVP_PKEY_size(ctx)
+  local buf_size = OPENSSL_3X and C.EVP_PKEY_get_size(ctx) or C.EVP_PKEY_size(ctx)
 
   local self = setmetatable({
     ctx = ctx,
     pkey_ctx = nil,
-    rsa_padding = nil,
     key_type = key_type,
     key_type_is_ecx = key_type_is_ecx,
     buf = ctypes.uchar_array(buf_size),
@@ -461,19 +564,34 @@ function _M:get_key_type()
   return objects_lib.nid2table(self.key_type)
 end
 
-local get_pkey_key
-if OPENSSL_11_OR_LATER then
-  get_pkey_key = {
-    [evp_macro.EVP_PKEY_RSA] = function(ctx) return C.EVP_PKEY_get0_RSA(ctx) end,
-    [evp_macro.EVP_PKEY_EC] = function(ctx) return C.EVP_PKEY_get0_EC_KEY(ctx) end,
-    [evp_macro.EVP_PKEY_DH]  = function(ctx) return C.EVP_PKEY_get0_DH(ctx) end
-  }
-else
-  get_pkey_key = {
-    [evp_macro.EVP_PKEY_RSA] = function(ctx) return ctx.pkey and ctx.pkey.rsa end,
-    [evp_macro.EVP_PKEY_EC] = function(ctx) return ctx.pkey and ctx.pkey.ec end,
-    [evp_macro.EVP_PKEY_DH]  = function(ctx) return ctx.pkey and ctx.pkey.dh end,
-  }
+function _M:get_default_digest_type()
+  local nid = ptr_of_int()
+  local code = C.EVP_PKEY_get_default_digest_nid(self.ctx, nid)
+  if code == -2 then
+    return nil, "operation is not supported by the public key algorithm"
+  elseif code <= 0 then
+    return nil, format_error("get_default_digest", code)
+  end
+
+  local ret = objects_lib.nid2table(nid[0])
+  ret.mandatory = code == 2
+  return ret
+end
+
+function _M:get_provider_name()
+  if not OPENSSL_3X then
+    return false, "pkey:get_provider_name is not supported"
+  end
+  local p = C.EVP_PKEY_get0_provider(self.ctx)
+  if p == nil then
+    return nil
+  end
+  return ffi_str(C.OSSL_PROVIDER_get0_name(p))
+end
+
+if OPENSSL_3X then
+  local param_lib = require "resty.openssl.param"
+  _M.settable_params, _M.set_params, _M.gettable_params, _M.get_param = param_lib.get_params_func("EVP_PKEY", "key_type")
 end
 
 function _M:get_parameters()
@@ -541,23 +659,26 @@ local ASYMMETRIC_OP_DECRYPT = 0x2
 local ASYMMETRIC_OP_SIGN_RAW = 0x4
 local ASYMMETRIC_OP_VERIFY_RECOVER = 0x8
 
-local function asymmetric_routine(self, s, op, padding)
+local function asymmetric_routine(self, s, op, padding, opts)
+  if type(s) ~= "string" then
+    return nil, "pkey:asymmetric_routine: expect a string at #1"
+  end
+
   local pkey_ctx
 
   if self.key_type == evp_macro.EVP_PKEY_RSA then
     if padding then
       padding = tonumber(padding)
       if not padding then
-        return nil, "invalid padding: " .. tostring(padding)
+        return nil, "invalid padding: " .. __tostring(padding)
       end
     else
       padding = rsa_macro.paddings.RSA_PKCS1_PADDING
     end
   end
 
-  if self.pkey_ctx ~= nil and
-      (self.key_type ~= evp_macro.EVP_PKEY_RSA or self.rsa_padding == padding) then
-        pkey_ctx = self.pkey_ctx
+  if self.pkey_ctx ~= nil and self.key_type ~= evp_macro.EVP_PKEY_RSA then
+    pkey_ctx = self.pkey_ctx
   else
     pkey_ctx = C.EVP_PKEY_CTX_new(self.ctx, nil)
     if pkey_ctx == nil then
@@ -594,11 +715,14 @@ local function asymmetric_routine(self, s, op, padding)
   end
 
   -- EVP_PKEY_CTX_ctrl must be called after *_init
-  if self.key_type == evp_macro.EVP_PKEY_RSA and padding then
-    if evp_macro.EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, padding) ~= 1 then
-      return nil, format_error("pkey:asymmetric_routine EVP_PKEY_CTX_set_rsa_padding")
-    end
-    self.rsa_padding = padding
+  if self.key_type == evp_macro.EVP_PKEY_RSA and padding and 
+      pkey_macro.EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, padding) ~= 1 then
+    return nil, format_error("pkey:asymmetric_routine EVP_PKEY_CTX_set_rsa_padding")
+  end
+
+  local ok, err = _pctx_ctrl_str(pkey_ctx, opts)
+  if not ok then
+    return nil, "pkey:asymmetric_routine: " .. err
   end
 
   local length = ptr_of_size_t(self.buf_size)
@@ -612,85 +736,82 @@ end
 
 _M.PADDINGS = rsa_macro.paddings
 
-function _M:encrypt(s, padding)
-  return asymmetric_routine(self, s, ASYMMETRIC_OP_ENCRYPT, padding)
+function _M:encrypt(s, padding, opts)
+  return asymmetric_routine(self, s, ASYMMETRIC_OP_ENCRYPT, padding, opts)
 end
 
-function _M:decrypt(s, padding)
-  return asymmetric_routine(self, s, ASYMMETRIC_OP_DECRYPT, padding)
+function _M:decrypt(s, padding, opts)
+  return asymmetric_routine(self, s, ASYMMETRIC_OP_DECRYPT, padding, opts)
 end
 
-function _M:sign_raw(s, padding)
-  return asymmetric_routine(self, s, ASYMMETRIC_OP_SIGN_RAW, padding)
+function _M:sign_raw(s, padding, opts)
+  -- TODO: temporary hack before OpenSSL has proper check for existence of private key
+  if self.key_type_is_ecx and not self:is_private() then
+    return nil, "pkey:sign_raw: missing private key"
+  end
+
+  return asymmetric_routine(self, s, ASYMMETRIC_OP_SIGN_RAW, padding, opts)
 end
 
-function _M:verify_recover(s, padding)
-  return asymmetric_routine(self, s, ASYMMETRIC_OP_VERIFY_RECOVER, padding)
+function _M:verify_recover(s, padding, opts)
+  return asymmetric_routine(self, s, ASYMMETRIC_OP_VERIFY_RECOVER, padding, opts)
 end
 
 local evp_pkey_ctx_ptr_ptr_ct = ffi.typeof('EVP_PKEY_CTX*[1]')
 
 local function sign_verify_prepare(self, fint, md_alg, padding, opts)
-  local pkey_ctx
-
-  if self.key_type == evp_macro.EVP_PKEY_RSA and padding then
-    pkey_ctx = C.EVP_PKEY_CTX_new(self.ctx, nil)
-    if pkey_ctx == nil then
-      return nil, format_error("pkey:sign_verify_prepare EVP_PKEY_CTX_new()")
-    end
-    ffi_gc(pkey_ctx, C.EVP_PKEY_CTX_free)
-  end
-
   local md_ctx = C.EVP_MD_CTX_new()
   if md_ctx == nil then
     return nil, "pkey:sign_verify_prepare: EVP_MD_CTX_new() failed"
   end
   ffi_gc(md_ctx, C.EVP_MD_CTX_free)
 
-  local dtyp
+  local algo
   if md_alg then
-    dtyp = C.EVP_get_digestbyname(md_alg)
-    if dtyp == nil then
+    if OPENSSL_3X then
+      algo = C.EVP_MD_fetch(ctx_lib.get_libctx(), md_alg, nil)
+    else
+      algo = C.EVP_get_digestbyname(md_alg)
+    end
+    if algo == nil then
       return nil, string.format("pkey:sign_verify_prepare: invalid digest type \"%s\"", md_alg)
     end
   end
 
   local ppkey_ctx = evp_pkey_ctx_ptr_ptr_ct()
-  ppkey_ctx[0] = pkey_ctx
-  if fint(md_ctx, ppkey_ctx, dtyp, nil, self.ctx) ~= 1 then
+  if fint(md_ctx, ppkey_ctx, algo, nil, self.ctx) ~= 1 then
     return nil, format_error("pkey:sign_verify_prepare: Init failed")
   end
 
-  if self.key_type == evp_macro.EVP_PKEY_RSA then
-    if padding then
-      if evp_macro.EVP_PKEY_CTX_set_rsa_padding(ppkey_ctx[0], padding) ~= 1 then
-        return nil, format_error("pkey:sign_verify_prepare EVP_PKEY_CTX_set_rsa_padding")
-      end
-    end
-    if opts and opts.pss_saltlen and padding ~= rsa_macro.paddings.RSA_PKCS1_PSS_PADDING then
-      if evp_macro.EVP_PKEY_CTX_set_rsa_pss_saltlen(ppkey_ctx[0], opts.pss_saltlen) ~= 1 then
-        return nil, format_error("pkey:sign_verify_prepare EVP_PKEY_CTX_set_rsa_pss_saltlen")
-      end
-    end
+  -- EVP_PKEY_CTX_ctrl must be called after *_init
+  if self.key_type == evp_macro.EVP_PKEY_RSA and padding and 
+      pkey_macro.EVP_PKEY_CTX_set_rsa_padding(ppkey_ctx[0], padding) ~= 1 then
+    return nil, format_error("pkey:sign_verify_prepare EVP_PKEY_CTX_set_rsa_padding")
+  end
+
+  local ok, err = _pctx_ctrl_str(ppkey_ctx[0], opts)
+  if not ok then
+    return nil, "pkey:sign_verify_prepare: " .. err
   end
 
   return md_ctx
 end
 
 function _M:sign(digest, md_alg, padding, opts)
+  -- TODO: temporary hack before OpenSSL has proper check for existence of private key
+  if self.key_type_is_ecx and not self:is_private() then
+    return nil, "pkey:sign: missing private key"
+  end
+
+  local ret, err
+
   if digest_lib.istype(digest) then
     local length = ptr_of_uint()
     if C.EVP_SignFinal(digest.ctx, self.buf, length, self.ctx) ~= 1 then
       return nil, format_error("pkey:sign: EVP_SignFinal")
     end
-    return ffi_str(self.buf, length[0]), nil
+    ret = ffi_str(self.buf, length[0])
   elseif type(digest) == "string" then
-    if not OPENSSL_111_OR_LATER then
-      -- we can still support earilier version with *Update and *Final
-      -- but we choose to not relying on the legacy interface for simplicity
-      return nil, "pkey:sign: new-style sign only available in OpenSSL 1.1 or later"
-    end
-
     local md_ctx, err = sign_verify_prepare(self, C.EVP_DigestSignInit, md_alg, padding, opts)
     if err then
       return nil, err
@@ -700,27 +821,42 @@ function _M:sign(digest, md_alg, padding, opts)
     if C.EVP_DigestSign(md_ctx, self.buf, length, digest, #digest) ~= 1 then
       return nil, format_error("pkey:sign: EVP_DigestSign")
     end
-    return ffi_str(self.buf, length[0]), nil
+    ret = ffi_str(self.buf, length[0])
   else
     return nil, "pkey:sign: expect a digest instance or a string at #1"
   end
+
+  if self.key_type == evp_macro.EVP_PKEY_EC and opts and opts.ecdsa_use_raw then
+    local ec_key = get_pkey_key[evp_macro.EVP_PKEY_EC](self.ctx)
+
+    ret, err = ecdsa_util.sig_der2raw(ret, ec_key)
+    if err then
+      return nil, "pkey:sign: ecdsa.sig_der2raw: " .. err
+    end
+  end
+
+  return ret
 end
 
 function _M:verify(signature, digest, md_alg, padding, opts)
   if type(signature) ~= "string" then
     return nil, "pkey:verify: expect a string at #1"
   end
+  local err
+
+  if self.key_type == evp_macro.EVP_PKEY_EC and opts and opts.ecdsa_use_raw then
+    local ec_key = get_pkey_key[evp_macro.EVP_PKEY_EC](self.ctx)
+
+    signature, err = ecdsa_util.sig_raw2der(signature, ec_key)
+    if err then
+      return nil, "pkey:sign: ecdsa.sig_raw2der: " .. err
+    end
+  end
 
   local code
   if digest_lib.istype(digest) then
     code = C.EVP_VerifyFinal(digest.ctx, signature, #signature, self.ctx)
   elseif type(digest) == "string" then
-    if not OPENSSL_111_OR_LATER then
-      -- we can still support earilier version with *Update and *Final
-      -- but we choose to not relying on the legacy interface for simplicity
-      return nil, "pkey:verify: new-style verify only available in OpenSSL 1.1 or later"
-    end
-
     local md_ctx, err = sign_verify_prepare(self, C.EVP_DigestVerifyInit, md_alg, padding, opts)
     if err then
       return nil, err
@@ -732,7 +868,7 @@ function _M:verify(signature, digest, md_alg, padding, opts)
   end
 
   if code == 0 then
-    return false, nil
+    return false, format_error("pkey:verify")
   elseif code == 1 then
     return true, nil
   end
@@ -783,16 +919,16 @@ local function pub_or_priv_is_pri(pub_or_priv)
   end
 end
 
-function _M:tostring(pub_or_priv, fmt)
+function _M:tostring(pub_or_priv, fmt, pkcs1)
   local is_priv, err = pub_or_priv_is_pri(pub_or_priv)
   if err then
     return nil, "pkey:tostring: " .. err
   end
-  return tostring(self, is_priv, fmt)
+  return __tostring(self, is_priv, fmt, pkcs1)
 end
 
-function _M:to_PEM(pub_or_priv)
-  return self:tostring(pub_or_priv, "PEM")
+function _M:to_PEM(pub_or_priv, pkcs1)
+  return self:tostring(pub_or_priv, "PEM", pkcs1)
 end
 
 function _M.paramgen(config)
@@ -832,7 +968,7 @@ function _M.paramgen(config)
     return nil, format_error("pkey.paramgen: EVP_PKEY_get0_{key}")
   end
 
-  return util.read_using_bio(write_func, ctx)
+  return bio_util.read_wrap(write_func, ctx)
 end
 
 return _M

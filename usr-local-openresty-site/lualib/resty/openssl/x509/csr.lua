@@ -7,18 +7,20 @@ require "resty.openssl.include.pem"
 require "resty.openssl.include.x509v3"
 require "resty.openssl.include.x509.csr"
 require "resty.openssl.include.asn1"
-local stack_macro = require "resty.openssl.include.stack"
+require "resty.openssl.include.stack"
 local stack_lib = require "resty.openssl.stack"
 local pkey_lib = require "resty.openssl.pkey"
 local digest_lib = require("resty.openssl.digest")
 local extension_lib = require("resty.openssl.x509.extension")
 local extensions_lib = require("resty.openssl.x509.extensions")
-local util = require "resty.openssl.util"
+local bio_util = require "resty.openssl.auxiliary.bio"
 local ctypes = require "resty.openssl.auxiliary.ctypes"
+local ctx_lib = require "resty.openssl.ctx"
 local txtnid2nid = require("resty.openssl.objects").txtnid2nid
+local find_sigid_algs = require("resty.openssl.objects").find_sigid_algs
 local format_error = require("resty.openssl.err").format_error
-local OPENSSL_10 = require("resty.openssl.version").OPENSSL_10
-local OPENSSL_11_OR_LATER = require("resty.openssl.version").OPENSSL_11_OR_LATER
+local version = require("resty.openssl.version")
+local OPENSSL_3X = version.OPENSSL_3X
 
 local accessors = {}
 
@@ -26,54 +28,36 @@ accessors.set_subject_name = C.X509_REQ_set_subject_name
 accessors.get_pubkey = C.X509_REQ_get_pubkey
 accessors.set_pubkey = C.X509_REQ_set_pubkey
 accessors.set_version = C.X509_REQ_set_version
+accessors.get_signature_nid = C.X509_REQ_get_signature_nid
+accessors.get_subject_name = C.X509_REQ_get_subject_name -- returns internal ptr
+accessors.get_version = C.X509_REQ_get_version
 
-if OPENSSL_11_OR_LATER then
-  accessors.get_subject_name = C.X509_REQ_get_subject_name -- returns internal ptr
-  accessors.get_version = C.X509_REQ_get_version
-  accessors.get_signature_nid = C.X509_REQ_get_signature_nid
-elseif OPENSSL_10 then
-  accessors.get_subject_name = function(csr)
-    if csr == nil or csr.req_info == nil then
-      return nil
-    end
-    return csr.req_info.subject
-  end
-  accessors.get_version = function(csr)
-    if csr == nil or csr.req_info == nil then
-      return nil
-    end
-    return C.ASN1_INTEGER_get(csr.req_info.version)
-  end
-  accessors.get_signature_nid = function(csr)
-    if csr == nil or csr.sig_alg == nil then
-      return nil
-    end
-    return C.OBJ_obj2nid(csr.sig_alg.algorithm)
-  end
-end
-
-local function tostring(self, fmt)
+local function __tostring(self, fmt)
   if not fmt or fmt == 'PEM' then
-    return util.read_using_bio(C.PEM_write_bio_X509_REQ, self.ctx)
+    return bio_util.read_wrap(C.PEM_write_bio_X509_REQ, self.ctx)
   elseif fmt == 'DER' then
-    return util.read_using_bio(C.i2d_X509_REQ_bio, self.ctx)
+    return bio_util.read_wrap(C.i2d_X509_REQ_bio, self.ctx)
   else
     return nil, "x509.csr:tostring: can only write PEM or DER format, not " .. fmt
   end
 end
 
 local _M = {}
-local mt = { __index = _M, __tostring = tostring }
+local mt = { __index = _M, __tostring = __tostring }
 
 local x509_req_ptr_ct = ffi.typeof("X509_REQ*")
 
 local stack_ptr_type = ffi.typeof("struct stack_st *[1]")
 local x509_extensions_gc = stack_lib.gc_of("X509_EXTENSION")
 
-function _M.new(csr, fmt)
+function _M.new(csr, fmt, properties)
   local ctx
   if not csr then
-    ctx = C.X509_REQ_new()
+    if OPENSSL_3X then
+      ctx = C.X509_REQ_new_ex(ctx_lib.get_libctx(), properties)
+    else
+      ctx = C.X509_REQ_new()
+    end
     if ctx == nil then
       return nil, "x509.csr.new: X509_REQ_new() failed"
     end
@@ -96,8 +80,6 @@ function _M.new(csr, fmt)
           if code ~= 1 then
               return nil, "x509.csr.new: BIO_ctrl() failed: " .. code
           end
-          -- clear errors occur when trying
-          C.ERR_clear_error()
         end
       end
       if fmt == "DER" or fmt == "*" then
@@ -109,6 +91,8 @@ function _M.new(csr, fmt)
     if ctx == nil then
       return nil, format_error("x509.csr.new")
     end
+    -- clear errors occur when trying
+    C.ERR_clear_error()
   else
     return nil, "x509.csr.new: expect nil or a string at #1"
   end
@@ -126,11 +110,11 @@ function _M.istype(l)
 end
 
 function _M:tostring(fmt)
-  return tostring(self, fmt)
+  return __tostring(self, fmt)
 end
 
 function _M:to_PEM()
-  return tostring(self, "PEM")
+  return __tostring(self, "PEM")
 end
 
 function _M:check_private_key(key)
@@ -212,7 +196,7 @@ local function modify_extension(replace, ctx, nid, toset, crit)
   -- https://github.com/openssl/openssl/commit/2039ac07b401932fa30a05ade80b3626e189d78a
   -- introduces a change that a empty stack instead of NULL will be returned in no extension
   -- is found. so we need to double check the number if it's not NULL.
-                        stack_macro.OPENSSL_sk_num(extensions_ptr[0]) > 0
+                        C.OPENSSL_sk_num(extensions_ptr[0]) > 0
 
   local flag
   if replace then
@@ -231,11 +215,6 @@ local function modify_extension(replace, ctx, nid, toset, crit)
     return false, format_error("X509V3_add1_i2d", code)
   end
 
-  code = C.X509_REQ_add_extensions(ctx, extensions_ptr[0])
-  if code ~= 1 then
-    return false, format_error("X509_REQ_add_extensions", code)
-  end
-
   if need_cleanup then
     -- cleanup old attributes
     -- delete the first only, why?
@@ -245,12 +224,13 @@ local function modify_extension(replace, ctx, nid, toset, crit)
     end
   end
 
-  -- mark encoded form as invalid so next time it will be re-encoded
-  if OPENSSL_11_OR_LATER then
-    C.i2d_re_X509_REQ_tbs(ctx, nil)
-  else
-    ctx.req_info.enc.modified = 1
+  code = C.X509_REQ_add_extensions(ctx, extensions_ptr[0])
+  if code ~= 1 then
+    return false, format_error("X509_REQ_add_extensions", code)
   end
+
+  -- mark encoded form as invalid so next time it will be re-encoded
+  C.i2d_re_X509_REQ_tbs(ctx, nil)
 
   return true
 end
@@ -317,16 +297,18 @@ function _M:sign(pkey, digest)
     return false, "x509.csr:sign: expect a pkey instance at #1"
   end
 
+  local digest_algo
   if digest then
     if not digest_lib.istype(digest) then
       return false, "x509.csr:sign: expect a digest instance at #2"
-    elseif not digest.dtyp then
-      return false, "x509.csr:sign: expect a digest instance to have dtyp member"
+    elseif not digest.algo then
+      return false, "x509.csr:sign: expect a digest instance to have algo member"
     end
+    digest_algo = digest.algo
   end
 
   -- returns size of signature if success
-  if C.X509_REQ_sign(self.ctx, pkey.ctx, digest and digest.dtyp) == 0 then
+  if C.X509_REQ_sign(self.ctx, pkey.ctx, digest_algo) == 0 then
     return false, format_error("x509.csr:sign")
   end
 
@@ -492,6 +474,18 @@ function _M:get_signature_name()
   if nid <= 0 then
     return nil, format_error("x509.csr:get_signature_name")
   end
+
+  return ffi.string(C.OBJ_nid2sn(nid))
+end
+
+-- AUTO GENERATED
+function _M:get_signature_digest_name()
+  local nid = accessors.get_signature_nid(self.ctx)
+  if nid <= 0 then
+    return nil, format_error("x509.csr:get_signature_digest_name")
+  end
+
+  local nid = find_sigid_algs(nid)
 
   return ffi.string(C.OBJ_nid2sn(nid))
 end

@@ -4,6 +4,7 @@ local ffi_str = ffi.string
 local ffi_sizeof = ffi.sizeof
 
 require "resty.openssl.include.objects"
+require "resty.openssl.include.err"
 
 local buf = ffi.new('char[?]', 100)
 
@@ -31,6 +32,8 @@ local function txt2nid(txt)
   end
   local nid = C.OBJ_txt2nid(txt)
   if nid == 0 then
+    -- clean up error occurs during OBJ_txt2nid
+    C.ERR_clear_error()
     return nil, "objects.txt2nid: invalid NID text " .. txt
   end
   return nid
@@ -41,6 +44,8 @@ local function txtnid2nid(txt_nid)
   if type(txt_nid) == "string" then
     nid = C.OBJ_txt2nid(txt_nid)
     if nid == 0 then
+      -- clean up error occurs during OBJ_txt2nid
+      C.ERR_clear_error()
       return nil, "objects.txtnid2nid: invalid NID text " .. txt_nid
     end
   elseif type(txt_nid) == "number" then
@@ -51,10 +56,19 @@ local function txtnid2nid(txt_nid)
   return nid
 end
 
+local function find_sigid_algs(nid)
+  local out = ffi.new("int[0]")
+  if C.OBJ_find_sigid_algs(nid, out, nil) == 0 then
+    return 0, "objects.find_sigid_algs: invalid sigid " .. nid
+  end
+  return tonumber(out[0])
+end
+
 return {
   obj2table = obj2table,
   nid2table = nid2table,
   txt2nid = txt2nid,
   txtnid2nid = txtnid2nid,
+  find_sigid_algs = find_sigid_algs,
   create = C.OBJ_create,
 }

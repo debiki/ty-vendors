@@ -4,11 +4,13 @@ local ffi_gc = ffi.gc
 local ffi_str = ffi.string
 local ffi_cast = ffi.cast
 
+require "resty.openssl.include.evp.cipher"
 local evp_macro = require "resty.openssl.include.evp"
 local ctypes = require "resty.openssl.auxiliary.ctypes"
+local ctx_lib = require "resty.openssl.ctx"
 local format_error = require("resty.openssl.err").format_error
-local OPENSSL_10 = require("resty.openssl.version").OPENSSL_10
-local OPENSSL_11_OR_LATER = require("resty.openssl.version").OPENSSL_11_OR_LATER
+local OPENSSL_3X = require("resty.openssl.version").OPENSSL_3X
+local log_warn = require "resty.openssl.auxiliary.compat".log_warn
 
 local uchar_array = ctypes.uchar_array
 local void_ptr = ctypes.void_ptr
@@ -19,46 +21,78 @@ local mt = {__index = _M}
 
 local cipher_ctx_ptr_ct = ffi.typeof('EVP_CIPHER_CTX*')
 
-function _M.new(typ)
+local out_length = ptr_of_int()
+-- EVP_MAX_BLOCK_LENGTH is 32, we give it a 64 to be future proof
+local out_buffer_size = 1024
+local out_buffer = ctypes.uchar_array(out_buffer_size + 64)
+
+function _M.new(typ, properties)
   if not typ then
     return nil, "cipher.new: expect type to be defined"
   end
 
-  local ctx
-  if OPENSSL_11_OR_LATER then
-    ctx = C.EVP_CIPHER_CTX_new()
-    ffi_gc(ctx, C.EVP_CIPHER_CTX_free)
-  elseif OPENSSL_10 then
-    ctx = ffi.new('EVP_CIPHER_CTX')
-    C.EVP_CIPHER_CTX_init(ctx)
-    ffi_gc(ctx, C.EVP_CIPHER_CTX_cleanup)
-  end
+  local ctx = C.EVP_CIPHER_CTX_new()
   if ctx == nil then
     return nil, "cipher.new: failed to create EVP_CIPHER_CTX"
   end
+  ffi_gc(ctx, C.EVP_CIPHER_CTX_free)
 
-  local dtyp = C.EVP_get_cipherbyname(typ)
-  if dtyp == nil then
-    return nil, string.format("cipher.new: invalid cipher type \"%s\"", typ)
+  local ctyp
+  if OPENSSL_3X then
+    ctyp = C.EVP_CIPHER_fetch(ctx_lib.get_libctx(), typ, properties)
+  else
+    ctyp = C.EVP_get_cipherbyname(typ)
+  end
+  local err_new = string.format("cipher.new: invalid cipher type \"%s\"", typ)
+  if ctyp == nil then
+    return nil, format_error(err_new)
   end
 
-  local code = C.EVP_CipherInit_ex(ctx, dtyp, nil, "", nil, -1)
+  local code = C.EVP_CipherInit_ex(ctx, ctyp, nil, "", nil, -1)
   if code ~= 1 then
-    return nil, format_error("cipher.new")
+    return nil, format_error(err_new)
   end
 
   return setmetatable({
     ctx = ctx,
-    cipher_type = dtyp,
+    algo = ctyp,
     initialized = false,
-    block_size = tonumber(C.EVP_CIPHER_CTX_block_size(ctx)),
-    key_size = tonumber(C.EVP_CIPHER_CTX_key_length(ctx)),
-    iv_size = tonumber(C.EVP_CIPHER_CTX_iv_length(ctx)),
+    block_size = tonumber(OPENSSL_3X and C.EVP_CIPHER_CTX_get_block_size(ctx)
+                                    or C.EVP_CIPHER_CTX_block_size(ctx)),
+    key_size = tonumber(OPENSSL_3X and C.EVP_CIPHER_CTX_get_key_length(ctx)
+                                    or C.EVP_CIPHER_CTX_key_length(ctx)),
+    iv_size = tonumber(OPENSSL_3X and C.EVP_CIPHER_CTX_get_iv_length(ctx)
+                                    or C.EVP_CIPHER_CTX_iv_length(ctx)),
   }, mt), nil
 end
 
 function _M.istype(l)
   return l and l.ctx and ffi.istype(cipher_ctx_ptr_ct, l.ctx)
+end
+
+function _M.set_buffer_size(sz)
+  if out_buffer_size ~= sz then
+    out_buffer_size = sz
+    out_buffer = ctypes.uchar_array(sz + 64)
+  end
+
+  return true
+end
+
+function _M:get_provider_name()
+  if not OPENSSL_3X then
+    return false, "cipher:get_provider_name is not supported"
+  end
+  local p = C.EVP_CIPHER_get0_provider(self.algo)
+  if p == nil then
+    return nil
+  end
+  return ffi_str(C.OSSL_PROVIDER_get0_name(p))
+end
+
+if OPENSSL_3X then
+  local param_lib = require "resty.openssl.param"
+  _M.settable_params, _M.set_params, _M.gettable_params, _M.get_param = param_lib.get_params_func("EVP_CIPHER_CTX")
 end
 
 function _M:init(key, iv, opts)
@@ -72,8 +106,8 @@ function _M:init(key, iv, opts)
 
   -- always passed in the `EVP_CIPHER` parameter to reinitialized the cipher
   -- it will have a same effect as EVP_CIPHER_CTX_cleanup/EVP_CIPHER_CTX_reset then Init_ex with
-  -- empty cipher_type
-  if C.EVP_CipherInit_ex(self.ctx, self.cipher_type, nil, key, iv, opts.is_encrypt and 1 or 0) == 0 then
+  -- empty algo
+  if C.EVP_CipherInit_ex(self.ctx, self.algo, nil, key, iv, opts.is_encrypt and 1 or 0) == 0 then
     return false, format_error("cipher:init EVP_CipherInit_ex")
   end
 
@@ -133,8 +167,7 @@ function _M:update_aead_aad(aad)
     return nil, "cipher:update_aead_aad: cipher not initalized, call cipher:init first"
   end
 
-  local outl = ptr_of_int()
-  if C.EVP_CipherUpdate(self.ctx, nil, outl, aad, #aad) ~= 1 then
+  if C.EVP_CipherUpdate(self.ctx, nil, out_length, aad, #aad) ~= 1 then
     return false, format_error("cipher:update_aead_aad")
   end
   return true
@@ -149,12 +182,11 @@ function _M:get_aead_tag(size)
   if size > self.key_size then
     return nil, string.format("tag size %d is too large", size)
   end
-  local buf = uchar_array(size)
-  if C.EVP_CIPHER_CTX_ctrl(self.ctx, evp_macro.EVP_CTRL_AEAD_GET_TAG, size, buf) ~= 1 then
+  if C.EVP_CIPHER_CTX_ctrl(self.ctx, evp_macro.EVP_CTRL_AEAD_GET_TAG, size, out_buffer) ~= 1 then
     return nil, format_error("cipher:get_aead_tag")
   end
 
-  return ffi_str(buf, size)
+  return ffi_str(out_buffer, size)
 end
 
 function _M:set_aead_tag(tag)
@@ -173,50 +205,58 @@ function _M:set_aead_tag(tag)
   return true
 end
 
+local update_buffer = {}
 function _M:update(...)
   if not self.initialized then
     return nil, "cipher:update: cipher not initalized, call cipher:init first"
   end
 
-  local ret = {}
-  local max_length = 0
-  for _, s in ipairs({...}) do
-    local len = #s
-    if len > max_length then
-      max_length = len
+  table.clear(update_buffer)
+  local _out_buffer = out_buffer
+  for i, s in ipairs({...}) do
+    local inl = #s
+    if inl > out_buffer_size and _out_buffer == out_buffer then
+      -- create a larger buffer than the default one
+      _out_buffer = ctypes.uchar_array(inl + 64)
     end
-  end
-  if max_length == 0 then
-    return nil
-  end
-  local out = uchar_array(max_length + self.block_size)
-  local outl = ptr_of_int()
-  for _, s in ipairs({...}) do
-    if C.EVP_CipherUpdate(self.ctx, out, outl, s, #s) ~= 1 then
+    if C.EVP_CipherUpdate(self.ctx, _out_buffer, out_length, s, inl) ~= 1 then
       return nil, format_error("cipher:update")
     end
-    table.insert(ret, ffi_str(out, outl[0]))
+    table.insert(update_buffer, ffi_str(_out_buffer, out_length[0]))
   end
-  return table.concat(ret, "")
+  return table.concat(update_buffer, "")
 end
 
 function _M:final(s)
-  local ret, err
-  if s then
-    ret, err = self:update(s)
-    if err then
-      return nil, err
-    end
+  if not self.initialized then
+    return nil, "cipher:update: cipher not initalized, call cipher:init first"
   end
-  local outm = uchar_array(self.block_size)
-  local outl = ptr_of_int()
-  if C.EVP_CipherFinal_ex(self.ctx, outm, outl) ~= 1 then
+
+  out_length[0] = 0
+  local offset = 0 -- advance the offset if we have update buffer
+  local _out_buffer = out_buffer
+  if s then
+    local inl = #s
+    if inl > out_buffer_size then
+      -- create a larger buffer than the default one
+      _out_buffer = ctypes.uchar_array(inl + 64)
+    end
+
+    if C.EVP_CipherUpdate(self.ctx, _out_buffer, out_length, s, inl) ~= 1 then
+      return nil, format_error("cipher:final")
+    end
+    offset = out_length[0]
+  end
+
+  if C.EVP_CipherFinal_ex(self.ctx, _out_buffer + offset, out_length) ~= 1 then
     return nil, format_error("cipher:final: EVP_CipherFinal_ex")
   end
-  return (ret or "") .. ffi_str(outm, outl[0])
+
+  return ffi_str(_out_buffer, out_length[0] + offset)
 end
 
-function _M:derive(key, salt, count, md)
+
+function _M:derive(key, salt, count, md, md_properties)
   if type(key) ~= "string" then
     return nil, nil, "cipher:derive: expect a string at #1"
   elseif salt and type(salt) ~= "string" then
@@ -232,15 +272,20 @@ function _M:derive(key, salt, count, md)
 
   if salt then
     if #salt > 8 then
-      ngx.log(ngx.WARN, "cipher:derive: salt is too long, truncate salt to 8 bytes")
+      log_warn("cipher:derive: salt is too long, truncate salt to 8 bytes")
       salt = salt:sub(0, 8)
     elseif #salt < 8 then
-      ngx.log(ngx.WARN, "cipher:derive: salt is too short, padding with zero bytes to length")
+      log_warn("cipher:derive: salt is too short, padding with zero bytes to length")
       salt = salt .. string.rep('\000', 8 - #salt)
     end
   end
 
-  local mdt = C.EVP_get_digestbyname(md or 'sha1')
+  local mdt
+  if OPENSSL_3X then
+    mdt = C.EVP_MD_fetch(ctx_lib.get_libctx(), md or 'sha1', md_properties)
+  else
+    mdt = C.EVP_get_digestbyname(md or 'sha1')
+  end
   if mdt == nil then
     return nil, nil, string.format("cipher:derive: invalid digest type \"%s\"", md)
   end

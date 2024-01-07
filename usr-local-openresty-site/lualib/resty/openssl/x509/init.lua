@@ -8,18 +8,20 @@ require "resty.openssl.include.x509"
 require "resty.openssl.include.x509v3"
 require "resty.openssl.include.evp"
 require "resty.openssl.include.objects"
-local stack_macro = require("resty.openssl.include.stack")
+require "resty.openssl.include.stack"
 local stack_lib = require("resty.openssl.stack")
 local asn1_lib = require("resty.openssl.asn1")
 local digest_lib = require("resty.openssl.digest")
 local extension_lib = require("resty.openssl.x509.extension")
 local pkey_lib = require("resty.openssl.pkey")
-local util = require "resty.openssl.util"
+local bio_util = require "resty.openssl.auxiliary.bio"
 local txtnid2nid = require("resty.openssl.objects").txtnid2nid
+local find_sigid_algs = require("resty.openssl.objects").find_sigid_algs
 local ctypes = require "resty.openssl.auxiliary.ctypes"
+local ctx_lib = require "resty.openssl.ctx"
 local format_error = require("resty.openssl.err").format_error
-local OPENSSL_10 = require("resty.openssl.version").OPENSSL_10
-local OPENSSL_11_OR_LATER = require("resty.openssl.version").OPENSSL_11_OR_LATER
+local version = require("resty.openssl.version")
+local OPENSSL_3X = version.OPENSSL_3X
 
 -- accessors provides an openssl version neutral interface to lua layer
 -- it doesn't handle any error, expect that to be implemented in
@@ -36,65 +38,45 @@ accessors.get_issuer_name = C.X509_get_issuer_name -- returns internal ptr, we d
 accessors.set_issuer_name = C.X509_set_issuer_name
 accessors.get_signature_nid = C.X509_get_signature_nid
 
-if OPENSSL_11_OR_LATER then
-  -- generally, use get1 if we return a lua table wrapped ctx which doesn't support dup.
-  -- in that case, a new struct is returned from C api, and we will handle gc.
-  -- openssl will increment the reference count for returned ptr, and won't free it when
-  -- parent struct is freed.
-  -- otherwise, use get0, which returns an internal pointer, we don't need to free it up.
-  -- it will be gone together with the parent struct.
-  accessors.get_not_before = C.X509_get0_notBefore -- returns internal ptr, we convert to number
-  accessors.set_not_before = C.X509_set1_notBefore
-  accessors.get_not_after = C.X509_get0_notAfter -- returns internal ptr, we convert to number
-  accessors.set_not_after = C.X509_set1_notAfter
-  accessors.get_version = C.X509_get_version -- returns int
-  accessors.get_serial_number = C.X509_get0_serialNumber -- returns internal ptr, we convert to bn
-elseif OPENSSL_10 then
-  accessors.get_not_before = function(x509)
-    if x509 == nil or x509.cert_info == nil or x509.cert_info.validity == nil then
-      return nil
-    end
-    return x509.cert_info.validity.notBefore
-  end
-  accessors.set_not_before = C.X509_set_notBefore
-  accessors.get_not_after = function(x509)
-    if x509 == nil or x509.cert_info == nil or x509.cert_info.validity == nil then
-      return nil
-    end
-    return x509.cert_info.validity.notAfter
-  end
-  accessors.set_not_after = C.X509_set_notAfter
-  accessors.get_version = function(x509)
-    if x509 == nil or x509.cert_info == nil or x509.cert_info.validity == nil then
-      return nil
-    end
-    return C.ASN1_INTEGER_get(x509.cert_info.version)
-  end
-  accessors.get_serial_number = C.X509_get_serialNumber -- returns internal ptr, we convert to bn
-end
+-- generally, use get1 if we return a lua table wrapped ctx which doesn't support dup.
+-- in that case, a new struct is returned from C api, and we will handle gc.
+-- openssl will increment the reference count for returned ptr, and won't free it when
+-- parent struct is freed.
+-- otherwise, use get0, which returns an internal pointer, we don't need to free it up.
+-- it will be gone together with the parent struct.
+accessors.get_not_before = C.X509_get0_notBefore -- returns internal ptr, we convert to number
+accessors.set_not_before = C.X509_set1_notBefore
+accessors.get_not_after = C.X509_get0_notAfter -- returns internal ptr, we convert to number
+accessors.set_not_after = C.X509_set1_notAfter
+accessors.get_version = C.X509_get_version -- returns int
+accessors.get_serial_number = C.X509_get0_serialNumber -- returns internal ptr, we convert to bn
 
-local function tostring(self, fmt)
+local function __tostring(self, fmt)
   if not fmt or fmt == 'PEM' then
-    return util.read_using_bio(C.PEM_write_bio_X509, self.ctx)
+    return bio_util.read_wrap(C.PEM_write_bio_X509, self.ctx)
   elseif fmt == 'DER' then
-    return util.read_using_bio(C.i2d_X509_bio, self.ctx)
+    return bio_util.read_wrap(C.i2d_X509_bio, self.ctx)
   else
     return nil, "x509:tostring: can only write PEM or DER format, not " .. fmt
   end
 end
 
 local _M = {}
-local mt = { __index = _M, __tostring = tostring }
+local mt = { __index = _M, __tostring = __tostring }
 
 
 local x509_ptr_ct = ffi.typeof("X509*")
 
 -- only PEM format is supported for now
-function _M.new(cert, fmt)
+function _M.new(cert, fmt, properties)
   local ctx
   if not cert then
     -- routine for create a new cert
-    ctx = C.X509_new()
+    if OPENSSL_3X then
+      ctx = C.X509_new_ex(ctx_lib.get_libctx(), properties)
+    else
+      ctx = C.X509_new()
+    end
     if ctx == nil then
       return nil, format_error("x509.new")
     end
@@ -122,8 +104,6 @@ function _M.new(cert, fmt)
             C.BIO_free(bio)
             return nil, "x509.new: BIO_ctrl() failed: " .. code
           end
-          -- clear errors occur when trying
-          C.ERR_clear_error()
         end
       end
       if fmt == "DER" or fmt == "*" then
@@ -135,6 +115,8 @@ function _M.new(cert, fmt)
     if ctx == nil then
       return nil, format_error("x509.new")
     end
+    -- clear errors occur when trying
+    C.ERR_clear_error()
     ffi_gc(ctx, C.X509_free)
   elseif type(cert) == 'cdata' then
     if ffi.istype(x509_ptr_ct, cert) then
@@ -177,11 +159,11 @@ function _M.dup(ctx)
 end
 
 function _M:tostring(fmt)
-  return tostring(self, fmt)
+  return __tostring(self, fmt)
 end
 
 function _M:to_PEM()
-  return tostring(self, "PEM")
+  return __tostring(self, "PEM")
 end
 
 function _M:set_lifetime(not_before, not_after)
@@ -218,7 +200,7 @@ end
 
 -- note: index is 0 based
 local OPENSSL_STRING_value_at = function(ctx, i)
-  local ct = ffi_cast("OPENSSL_STRING", stack_macro.OPENSSL_sk_value(ctx, i))
+  local ct = ffi_cast("OPENSSL_STRING", C.OPENSSL_sk_value(ctx, i))
   if ct == nil then
     return nil
   end
@@ -228,7 +210,7 @@ end
 function _M:get_ocsp_url(return_all)
   local st = C.X509_get1_ocsp(self.ctx)
 
-  local count = stack_macro.OPENSSL_sk_num(st)
+  local count = C.OPENSSL_sk_num(st)
   if count == 0 then
     return
   end
@@ -297,42 +279,45 @@ function _M:get_crl_url(return_all)
   end
 end
 
-local function digest(self, cfunc, typ)
+local digest_length = ctypes.ptr_of_uint()
+local digest_buf, digest_buf_size
+local function digest(self, cfunc, typ, properties)
   -- TODO: dedup the following with resty.openssl.digest
-  local ctx
-  if OPENSSL_11_OR_LATER then
-    ctx = C.EVP_MD_CTX_new()
-    ffi_gc(ctx, C.EVP_MD_CTX_free)
-  elseif OPENSSL_10 then
-    ctx = C.EVP_MD_CTX_create()
-    ffi_gc(ctx, C.EVP_MD_CTX_destroy)
-  end
+  local ctx = C.EVP_MD_CTX_new()
   if ctx == nil then
     return nil, "x509:digest: failed to create EVP_MD_CTX"
   end
+  ffi_gc(ctx, C.EVP_MD_CTX_free)
 
-  local dtyp = C.EVP_get_digestbyname(typ or 'sha1')
-  if dtyp == nil then
+  local algo
+  if OPENSSL_3X then
+    algo = C.EVP_MD_fetch(ctx_lib.get_libctx(), typ or 'sha1', properties)
+  else
+    algo = C.EVP_get_digestbyname(typ or 'sha1')
+  end
+  if algo == nil then
     return nil, string.format("x509:digest: invalid digest type \"%s\"", typ)
   end
 
-  local md_size = C.EVP_MD_size(dtyp)
-  local buf = ctypes.uchar_array(md_size)
-  local length = ctypes.ptr_of_uint()
+  local md_size = OPENSSL_3X and C.EVP_MD_get_size(algo) or C.EVP_MD_size(algo)
+  if not digest_buf or digest_buf_size < md_size then
+    digest_buf = ctypes.uchar_array(md_size)
+    digest_buf_size = md_size
+  end
 
-  if cfunc(self.ctx, dtyp, buf, length) ~= 1 then
+  if cfunc(self.ctx, algo, digest_buf, digest_length) ~= 1 then
     return nil, format_error("x509:digest")
   end
 
-  return ffi_str(buf, length[0])
+  return ffi_str(digest_buf, digest_length[0])
 end
 
-function _M:digest(typ)
-  return digest(self, C.X509_digest, typ)
+function _M:digest(typ, properties)
+  return digest(self, C.X509_digest, typ, properties)
 end
 
-function _M:pubkey_digest(typ)
-  return digest(self, C.X509_pubkey_digest, typ)
+function _M:pubkey_digest(typ, properties)
+  return digest(self, C.X509_pubkey_digest, typ, properties)
 end
 
 function _M:check_private_key(key)
@@ -358,16 +343,18 @@ function _M:sign(pkey, digest)
     return false, "x509:sign: expect a pkey instance at #1"
   end
 
+  local digest_algo
   if digest then
     if not digest_lib.istype(digest) then
       return false, "x509:sign: expect a digest instance at #2"
-    elseif not digest.dtyp then
-      return false, "x509:sign: expect a digest instance to have dtyp member"
+    elseif not digest.algo then
+      return false, "x509:sign: expect a digest instance to have algo member"
     end
+    digest_algo = digest.algo
   end
 
   -- returns size of signature if success
-  if C.X509_sign(self.ctx, pkey.ctx, digest and digest.dtyp) == 0 then
+  if C.X509_sign(self.ctx, pkey.ctx, digest_algo) == 0 then
     return false, format_error("x509:sign")
   end
 
@@ -436,19 +423,6 @@ function _M:get_extension(nid_txt, last_pos)
   return ext, pos+1
 end
 
-local X509_delete_ext
-if OPENSSL_11_OR_LATER then
-  X509_delete_ext = C.X509_delete_ext
-elseif OPENSSL_10 then
-  X509_delete_ext = function(ctx, pos)
-    return C.X509v3_delete_ext(ctx.cert_info.extensions, pos)
-  end
-else
-  X509_delete_ext = function(...)
-    error("X509_delete_ext undefined")
-  end
-end
-
 -- AUTO GENERATED
 function _M:set_extension(extension, last_pos)
   if not extension_lib.istype(extension) then
@@ -459,11 +433,9 @@ function _M:set_extension(extension, last_pos)
 
   local nid = extension:get_object().nid
   local pos = C.X509_get_ext_by_NID(self.ctx, nid, last_pos)
-  if pos == -1 then
-    return nil
-  end
+  -- pos may be -1, which means not found, it's fine, we will add new one instead of replace
 
-  local removed = X509_delete_ext(self.ctx, pos)
+  local removed = C.X509_delete_ext(self.ctx, pos)
   C.X509_EXTENSION_free(removed)
 
   if C.X509_add_ext(self.ctx, extension.ctx, pos) == nil then
@@ -1017,6 +989,18 @@ function _M:get_signature_name()
   if nid <= 0 then
     return nil, format_error("x509:get_signature_name")
   end
+
+  return ffi.string(C.OBJ_nid2sn(nid))
+end
+
+-- AUTO GENERATED
+function _M:get_signature_digest_name()
+  local nid = accessors.get_signature_nid(self.ctx)
+  if nid <= 0 then
+    return nil, format_error("x509:get_signature_digest_name")
+  end
+
+  local nid = find_sigid_algs(nid)
 
   return ffi.string(C.OBJ_nid2sn(nid))
 end

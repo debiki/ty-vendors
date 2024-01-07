@@ -161,13 +161,36 @@ latency.
         local http = require("resty.http")
         local res, err = httpc:request_uri("http://example.com")
         -- access the storage
-        local value, err = require("resty.acme.autossl").storage:get("key")
+        local acme = require("resty.acme.autossl")
+        local value, err = acme.storage:get("key")
+        -- get cert from resty LRU cache
+        -- cached = { pkey, cert } or nil if cert is not in cache
+        local cached, staled, flags = acme.get_cert_from_cache(domain, "rsa")
         -- do something to check the domain
         -- return is_domain_included
     end}),
 
 C<domain_whitelist_callback> function is provided with a second argument,
 which indicates whether the certificate is about to be served on incoming HTTP request (false) or new certificate is about to be requested (true). This allows to use cached values on hot path (serving requests) while fetching fresh data from storage for new certificates. One may also implement different logic, e.g. do extra checks before requesting new cert.
+
+In case of certificate request failure one may want to prevent ACME client to request another certificate immediatelly. By default, the cooloff period it is set to 300 seconds (5 minutes). It may be customized with C<failure_cooloff> or with C<failure_cooloff_callback> function, e.g. to implement exponential backoff.
+
+
+        failure_cooloff_callback = function(domain, count)
+          if count == 1 then
+            return 600 -- 10 minutes
+          elseif count == 2 then
+            return 1800 -- 30 minutes
+          elseif count == 3 then
+            return 3600 -- 1 hour
+          elseif count == 4 then
+            return 43200 -- 12 hours
+          elseif count == 5 then
+            return 43200 -- 12 hours
+          else
+            return 86400 -- 24 hours
+          end
+        end
 
 
 =head2 tls-alpn-01 challenge
@@ -328,10 +351,6 @@ C<http> and C<stream> subsystem doesn't share shm, thus considering use a storag
 than C<shm>. If you must use C<shm>, you will need to apply
 L<this patch|https://github.com/fffonion/lua-resty-shdict-server/tree/master/patches>.
 
-=item *
-
-C<tls-alpn-01> challenge handler is considered experiemental.
-
 
 =back
 
@@ -366,6 +385,10 @@ A config table can be passed to C<resty.acme.autossl.init()>, the default values
       domain_whitelist = nil,
       -- restrict registering new cert only with domain checked by this function
       domain_whitelist_callback = nil,
+      -- interval to wait before retrying after failed certificate request
+      failure_cooloff = 300,
+      -- function that returns interval to wait before retrying after failed certificate request
+      failure_cooloff_callback = nil,
       -- the threshold to renew a cert before it expires, in seconds
       renew_threshold = 7 * 86400,
       -- interval to check cert renewal, in seconds
@@ -380,6 +403,8 @@ A config table can be passed to C<resty.acme.autossl.init()>, the default values
       enabled_challenge_handlers = { 'http-01' },
       -- time to wait before signaling ACME server to validate in seconds
       challenge_start_delay = 0,
+      -- if true, the request to nginx waits until the cert has been generated and it is used right away
+      blocking = false,
     }
 
 If C<account_key_path> is not specified, a new account key will be created
@@ -617,6 +642,11 @@ Redis based storage. The default config is:
         database = 0,
         -- Redis authentication key
         auth = nil,
+        ssl = false,
+        ssl_verify = false,
+        ssl_server_name = nil,
+        -- namespace as a prefix of key
+        namespace = "",
     }
 
 Redis E<gt>= 2.6.0 is required as this storage requires L<PEXPIRE|https://redis.io/commands/pexpire>.
@@ -653,6 +683,8 @@ The default config is:
         auth_role = nil,
         -- The path to the JWT
         jwt_path = "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        -- Vault namespace
+        namespace = nil,
     }
 
 
@@ -736,6 +768,15 @@ autossl: ocsp staping
 
 
 =back
+
+
+
+
+=head1 Testing
+
+Setup e2e test environment by running C<bash t/fixtures/prepare_env.sh>.
+
+Then run C<cpanm install Test::Nginx::Socket> and then C<prove -r t>.
 
 
 

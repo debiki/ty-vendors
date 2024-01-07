@@ -15,7 +15,7 @@ ffi.cdef(
   void BN_free(BIGNUM *a);
 
   BN_CTX *BN_CTX_new(void);
-  void BN_CTX_init(BN_CTX *c);
+  // void BN_CTX_init(BN_CTX *c);
   void BN_CTX_free(BN_CTX *c);
 
   BIGNUM *BN_dup(const BIGNUM *a);
@@ -24,11 +24,16 @@ ffi.cdef(
   ]] .. BN_ULONG ..[[ BN_get_word(BIGNUM *a);
   int BN_num_bits(const BIGNUM *a);
   BIGNUM *BN_bin2bn(const unsigned char *s, int len, BIGNUM *ret);
+  int BN_bn2binpad(const BIGNUM *a, unsigned char *to, int tolen);
+
   int BN_hex2bn(BIGNUM **a, const char *str);
   int BN_dec2bn(BIGNUM **a, const char *str);
   int BN_bn2bin(const BIGNUM *a, unsigned char *to);
   char *BN_bn2hex(const BIGNUM *a);
   char *BN_bn2dec(const BIGNUM *a);
+
+  int BN_bn2mpi(const BIGNUM *a, unsigned char *to);
+  BIGNUM *BN_mpi2bn(const unsigned char *s, int len, BIGNUM *ret);
 
   void BN_set_negative(BIGNUM *a, int n);
   int  BN_is_negative(const BIGNUM *a);
@@ -57,7 +62,6 @@ ffi.cdef(
   int BN_cmp(BIGNUM *a, BIGNUM *b);
   int BN_ucmp(BIGNUM *a, BIGNUM *b);
 
-  // openssl >= 1.1 only
   int BN_is_zero(BIGNUM *a);
   int BN_is_one(BIGNUM *a);
   int BN_is_word(BIGNUM *a, ]] .. BN_ULONG ..[[ w);

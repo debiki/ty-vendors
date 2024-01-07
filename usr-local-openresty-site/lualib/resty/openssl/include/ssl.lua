@@ -1,12 +1,15 @@
 local ffi = require "ffi"
+local C = ffi.C
 
 require "resty.openssl.include.ossl_typ"
 require "resty.openssl.include.stack"
-local OPENSSL_30 = require("resty.openssl.version").OPENSSL_30
+local OPENSSL_3X = require("resty.openssl.version").OPENSSL_3X
 
 ffi.cdef [[
   // SSL_METHOD
   typedef struct ssl_method_st SSL_METHOD;
+  // const SSL_METHOD *TLS_method(void);
+  const SSL_METHOD *TLS_server_method(void);
 
   // SSL_CIPHER
   typedef struct ssl_cipher_st SSL_CIPHER;
@@ -49,7 +52,7 @@ ffi.cdef [[
   long SSL_get_options(SSL *ssl);
 
   /*STACK_OF(SSL_CIPHER)*/ OPENSSL_STACK *SSL_get_ciphers(const SSL *ssl);
-  /*STACK_OF(SSL_CIPHER)*/ OPENSSL_STACK *SSL_CTX_get_ciphers(const SSL_CTX *ctx);
+  // /*STACK_OF(SSL_CIPHER)*/ OPENSSL_STACK *SSL_CTX_get_ciphers(const SSL_CTX *ctx);
   OPENSSL_STACK *SSL_get_peer_cert_chain(const SSL *ssl);
 
   typedef int (*verify_callback)(int preverify_ok, X509_STORE_CTX *x509_ctx);
@@ -57,14 +60,32 @@ ffi.cdef [[
                      int (*verify_callback)(int, X509_STORE_CTX *));
 
   int SSL_add_client_CA(SSL *ssl, X509 *cacert);
+
+  long SSL_ctrl(SSL *ssl, int cmd, long larg, void *parg);
 ]]
 
-if OPENSSL_30 then
+if OPENSSL_3X then
   ffi.cdef [[
     X509 *SSL_get1_peer_certificate(const SSL *ssl);
   ]]
 else
-   ffi.cdef [[
+  ffi.cdef [[
     X509 *SSL_get_peer_certificate(const SSL *ssl);
   ]]
 end
+
+local SSL_CTRL_SET_MIN_PROTO_VERSION = 123
+local SSL_CTRL_SET_MAX_PROTO_VERSION = 124
+
+local SSL_set_min_proto_version = function(ctx, version)
+  return C.SSL_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, version, nil)
+end
+
+local SSL_set_max_proto_version = function(ctx, version)
+  return C.SSL_ctrl(ctx, SSL_CTRL_SET_MAX_PROTO_VERSION, version, nil)
+end
+
+return {
+  SSL_set_min_proto_version = SSL_set_min_proto_version,
+  SSL_set_max_proto_version = SSL_set_max_proto_version,
+}

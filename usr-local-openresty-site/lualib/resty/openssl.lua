@@ -3,15 +3,28 @@ local C = ffi.C
 local ffi_cast = ffi.cast
 local ffi_str = ffi.string
 
-require "resty.openssl.include.crypto"
-require "resty.openssl.include.evp"
-require "resty.openssl.include.objects"
-local OPENSSL_30 = require("resty.openssl.version").OPENSSL_30
 local format_error = require("resty.openssl.err").format_error
+
+local OPENSSL_3X
+
+local function try_require_modules()
+  package.loaded["resty.openssl.version"] = nil
+
+  local pok, lib = pcall(require, "resty.openssl.version")
+  if pok then
+    OPENSSL_3X = lib.OPENSSL_3X
+
+    require "resty.openssl.include.crypto"
+    require "resty.openssl.include.objects"
+  else
+    package.loaded["resty.openssl.version"] = nil
+  end
+end
+try_require_modules()
 
 
 local _M = {
-  _VERSION = '0.7.4',
+  _VERSION = '1.2.0',
 }
 
 function _M.load_modules()
@@ -38,8 +51,10 @@ function _M.load_modules()
   _M.ssl = require("resty.openssl.ssl")
   _M.ssl_ctx = require("resty.openssl.ssl_ctx")
 
-  if OPENSSL_30 then
+  if OPENSSL_3X then
     _M.provider = require("resty.openssl.provider")
+    _M.mac = require("resty.openssl.mac")
+    _M.ctx = require("resty.openssl.ctx")
   end
 
   _M.bignum = _M.bn
@@ -145,6 +160,9 @@ function _M.luaossl_compat()
     return _M.pkcs12.encode(tbl, passphrase)
   end
 
+  _M.crl.add = _M.crl.add_revoked
+  _M.crl.lookupSerial = _M.crl.get_by_serial
+
   for mod, tbl in pairs(_M) do
     if type(tbl) == 'table' then
 
@@ -196,53 +214,238 @@ function _M.luaossl_compat()
   end
 end
 
-function _M.set_fips_mode(enable)
-  if not not enable == _M.get_fips_mode() then
+if OPENSSL_3X then
+  require "resty.openssl.include.evp"
+  local provider = require "resty.openssl.provider"
+  local ctx_lib = require "resty.openssl.ctx"
+  local fips_provider_ctx
+
+  function _M.set_fips_mode(enable, self_test)
+    if (not not enable) == _M.get_fips_mode() then
+      return true
+    end
+
+    if enable then
+      local p, err = provider.load("fips")
+      if not p then
+        return false, err
+      end
+      fips_provider_ctx = p
+      if self_test then
+        local ok, err = p:self_test()
+        if not ok then
+          return false, err
+        end
+      end
+
+    elseif fips_provider_ctx then -- disable
+      local p = fips_provider_ctx
+      fips_provider_ctx = nil
+      return p:unload()
+    end
+
+    -- set algorithm in fips mode in default ctx
+    -- this deny/allow non-FIPS compliant algorithms to be used from EVP interface
+    -- and redirect/remove redirect implementation to fips provider
+    if C.EVP_default_properties_enable_fips(ctx_lib.get_libctx(), enable and 1 or 0) == 0 then
+      return false, format_error("openssl.set_fips_mode: EVP_default_properties_enable_fips")
+    end
+
     return true
   end
 
-  if C.FIPS_mode_set(enable and 1 or 0) == 0 then
-    return false, format_error("openssl.set_fips_mode")
+  function _M.get_fips_mode()
+    local pok = provider.is_available("fips")
+    if not pok then
+      return false
+    end
+
+    return C.EVP_default_properties_is_fips_enabled(ctx_lib.get_libctx()) == 1
+  end
+
+  function _M.get_fips_version_text()
+    if not fips_provider_ctx then
+      return false, "FIPS mode is not enabled"
+    end
+
+    return fips_provider_ctx:get_params("version")
+  end
+
+else
+  function _M.set_fips_mode(enable)
+    if (not not enable) == _M.get_fips_mode() then
+      return true
+    end
+
+    if C.FIPS_mode_set(enable and 1 or 0) == 0 then
+      return false, format_error("openssl.set_fips_mode")
+    end
+
+    return true
+  end
+
+  function _M.get_fips_mode()
+    return C.FIPS_mode() == 1
+  end
+
+  function _M.get_fips_version_text()
+    return nil, "openssl.get_fips_version_text not supported on OpenSSL 1.1.1"
+  end
+end
+
+function _M.set_default_properties(props)
+  if not OPENSSL_3X then
+    return nil, "openssl.set_default_properties is only not supported from OpenSSL 3.0"
+  end
+
+  local ctx_lib = require "resty.openssl.ctx"
+
+  if C.EVP_set_default_properties(ctx_lib.get_libctx(), props) == 0 then
+    return false, format_error("openssl.EVP_set_default_properties")
   end
 
   return true
 end
 
-function _M.get_fips_mode()
-  return C.FIPS_mode() == 1
+local function list_legacy(typ, get_nid_cf)
+  local typ_lower = string.lower(typ:sub(5)) -- cut off EVP_
+  require ("resty.openssl.include.evp." .. typ_lower)
+
+  local ret = {}
+  local fn = ffi_cast("fake_openssl_" .. typ_lower .. "_list_fn*",
+              function(elem, from, to, arg)
+                if elem ~= nil then
+                  local nid = get_nid_cf(elem)
+                  table.insert(ret, ffi_str(C.OBJ_nid2sn(nid)))
+                end
+                -- from/to (renamings) are ignored
+              end)
+  C[typ .. "_do_all_sorted"](fn, nil)
+  fn:free()
+
+  return ret
 end
 
-local function get_list_func(cf, l)
-  return function(elem, from, to, arg)
-    if elem ~= nil then
-      local nid = cf(elem)
-      table.insert(l, ffi_str(C.OBJ_nid2sn(nid)))
-    end
+local function list_provided(typ, hide_provider)
+  local typ_lower = string.lower(typ:sub(5)) -- cut off EVP_
+  local typ_ptr = typ .. "*"
+  require ("resty.openssl.include.evp." .. typ_lower)
+  local ctx_lib = require "resty.openssl.ctx"
+
+  local ret = {}
+
+  local fn = ffi_cast("fake_openssl_" .. typ_lower .. "_provided_list_fn*",
+              function(elem, _)
+                elem = ffi_cast(typ_ptr, elem)
+                local name = ffi_str(C[typ .. "_get0_name"](elem))
+                if hide_provider then
+                  table.insert(ret, name)
+                else
+                  -- alternate names are ignored, retrieve use TYPE_names_do_all
+                  local prov = ffi_str(C.OSSL_PROVIDER_get0_name(C[typ .. "_get0_provider"](elem)))
+                  table.insert(ret, name .. " @ " .. prov)
+                end
+              end)
+
+  C[typ .. "_do_all_provided"](ctx_lib.get_libctx(), fn, nil)
+  fn:free()
+
+  table.sort(ret)
+  return ret
+end
+
+function _M.list_cipher_algorithms(hide_provider)
+  require "resty.openssl.include.evp.cipher"
+
+  if OPENSSL_3X then
+    return list_provided("EVP_CIPHER", hide_provider)
+  else
+    return list_legacy("EVP_CIPHER", C.EVP_CIPHER_nid)
   end
 end
 
-function _M.list_cipher_algorithms()
-  local ret = {}
-  local fn = ffi_cast("fake_openssl_cipher_list_fn*",
-                      get_list_func(C.EVP_CIPHER_nid, ret))
+function _M.list_digest_algorithms(hide_provider)
+  require "resty.openssl.include.evp.md"
 
-  C.EVP_CIPHER_do_all_sorted(fn, nil)
-
-  fn:free()
-
-  return ret
+  if OPENSSL_3X then
+    return list_provided("EVP_MD", hide_provider)
+  else
+    return list_legacy("EVP_MD", C.EVP_MD_type)
+  end
 end
 
-function _M.list_digest_algorithms()
-  local ret = {}
-  local fn = ffi_cast("fake_openssl_md_list_fn*",
-                      get_list_func(C.EVP_MD_type, ret))
+function _M.list_mac_algorithms(hide_provider)
+  if not OPENSSL_3X then
+    return nil, "openssl.list_mac_algorithms is only supported from OpenSSL 3.0"
+  end
 
-  C.EVP_MD_do_all_sorted(fn, nil)
+  return list_provided("EVP_MAC", hide_provider)
+end
 
-  fn:free()
+function _M.list_kdf_algorithms(hide_provider)
+  if not OPENSSL_3X then
+    return nil, "openssl.list_kdf_algorithms is only supported from OpenSSL 3.0"
+  end
 
-  return ret
+  return list_provided("EVP_KDF", hide_provider)
+end
+
+local valid_ssl_protocols = {
+  ["SSLv3"]   = 0x0300,
+  ["TLSv1"]   = 0x0301,
+  ["TLSv1.1"] = 0x0302,
+  ["TLSv1.2"] = 0x0303,
+  ["TLSv1.3"] = 0x0304,
+}
+
+function _M.list_ssl_ciphers(cipher_list, ciphersuites, protocol)
+  local ssl_lib = require("resty.openssl.ssl")
+  local ssl_macro = require("resty.openssl.include.ssl")
+
+  if protocol then
+    if not valid_ssl_protocols[protocol] then
+      return nil, "unknown protocol \"" .. protocol .. "\""
+    end
+    protocol = valid_ssl_protocols[protocol]
+  end
+
+  local ssl_ctx = C.SSL_CTX_new(C.TLS_server_method())
+  if ssl_ctx == nil then
+    return nil, format_error("SSL_CTX_new")
+  end
+  ffi.gc(ssl_ctx, C.SSL_CTX_free)
+
+  local ssl = C.SSL_new(ssl_ctx)
+  if ssl == nil then
+    return nil, format_error("SSL_new")
+  end
+  ffi.gc(ssl, C.SSL_free)
+
+  if protocol then
+    if ssl_macro.SSL_set_min_proto_version(ssl, protocol) == 0 or
+    ssl_macro.SSL_set_max_proto_version(ssl, protocol) == 0 then
+        return nil, format_error("SSL_set_min/max_proto_version")
+    end
+  end
+
+  ssl = { ctx = ssl }
+
+  local ok, err
+  if cipher_list then
+    ok, err = ssl_lib.set_cipher_list(ssl, cipher_list)
+    if not ok then
+      return nil, err
+    end
+  end
+
+  if ciphersuites then
+    ok, err = ssl_lib.set_ciphersuites(ssl, ciphersuites)
+    if not ok then
+      return nil, err
+    end
+  end
+
+  return ssl_lib.get_ciphers(ssl)
 end
 
 return _M

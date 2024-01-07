@@ -5,14 +5,15 @@ local ffi_str = ffi.string
 
 require "resty.openssl.include.pkcs12"
 require "resty.openssl.include.bio"
-local util = require "resty.openssl.util"
+require "resty.openssl.include.stack"
+local bio_util = require "resty.openssl.auxiliary.bio"
 local format_error = require("resty.openssl.err").format_error
 local pkey_lib = require "resty.openssl.pkey"
 local x509_lib = require "resty.openssl.x509"
-local stack_macro = require "resty.openssl.include.stack"
 local stack_lib = require "resty.openssl.stack"
 local objects_lib = require "resty.openssl.objects"
-local OPENSSL_10 = require("resty.openssl.version").OPENSSL_10
+local ctx_lib = require "resty.openssl.ctx"
+local OPENSSL_3X = require("resty.openssl.version").OPENSSL_3X
 
 local stack_of_x509_new = stack_lib.new_of("X509")
 local stack_of_x509_add = stack_lib.add_of("X509")
@@ -39,6 +40,10 @@ local function decode(p12, passphrase)
   local px509 = ptr_ptr_of_x509()
   local pstack = ptr_ptr_of_stack()
   local stack = stack_of_x509_new()
+  if stack == nil then
+    return nil, "pkcs12.decode: OPENSSL_sk_new_null() failed"
+  end
+
   -- assign a valid OPENSSL_STACK so gc is taken care of
   pstack[0] = stack
 
@@ -48,7 +53,7 @@ local function decode(p12, passphrase)
   end
 
   local cacerts
-  local n = stack_macro.OPENSSL_sk_num(stack)
+  local n = C.OPENSSL_sk_num(stack)
   if n > 0 then
     cacerts = {}
     local iter = stack_of_x509_iter({ ctx = stack })
@@ -73,7 +78,7 @@ local function decode(p12, passphrase)
   }
 end
 
-local function encode(opts, passphrase)
+local function encode(opts, passphrase, properties)
   if passphrase and type(passphrase) ~= "string" then
     return nil, "pkcs12.encode: expect passphrase to be a string"
   end
@@ -117,36 +122,36 @@ local function encode(opts, passphrase)
       -- stack lib handles gc
       x509stack = stack_of_x509_new()
       for _, c in ipairs(cacerts) do
-        if not OPENSSL_10 then
-          if C.X509_up_ref(c.ctx) ~= 1 then
-            return nil, "pkcs12.encode: failed to add cacerts: X509_up_ref failed"
-          end
+        if C.X509_up_ref(c.ctx) ~= 1 then
+          return nil, "pkcs12.encode: failed to add cacerts: X509_up_ref failed"
         end
         local ok, err = stack_of_x509_add(x509stack, c.ctx)
         if not ok then
           return nil, "pkcs12.encode: failed to add cacerts: " .. err
         end
       end
-      if OPENSSL_10 then
-        -- OpenSSL 1.0.2 doesn't have X509_up_ref
-        -- shallow copy the stack, up_ref for each element
-        x509stack = C.X509_chain_up_ref(x509stack)
-        -- use the shallow gc
-        ffi_gc(x509stack, stack_macro.OPENSSL_sk_free)
-      end
     end
   end
 
-  local p12 = C.PKCS12_create(passphrase or "", opts.friendly_name,
+  local p12
+  if OPENSSL_3X then
+    p12 = C.PKCS12_create_ex(passphrase or "", opts.friendly_name,
                               pkey.ctx, cert.ctx, x509stack,
                               nid_key or 0, nid_cert or 0,
-                              opts.iter or 0, opts.mac_iter or 0, 0)
+                              opts.iter or 0, opts.mac_iter or 0, 0,
+                              ctx_lib.get_libctx(), properties)
+  else
+    p12 = C.PKCS12_create(passphrase or "", opts.friendly_name,
+                            pkey.ctx, cert.ctx, x509stack,
+                            nid_key or 0, nid_cert or 0,
+                            opts.iter or 0, opts.mac_iter or 0, 0)
+  end
   if p12 == nil then
     return nil, format_error("pkcs12.encode: PKCS12_create")
   end
   ffi_gc(p12, C.PKCS12_free)
 
-  return util.read_using_bio(C.i2d_PKCS12_bio, p12)
+  return bio_util.read_wrap(C.i2d_PKCS12_bio, p12)
 end
 
 return {

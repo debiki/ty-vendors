@@ -24,6 +24,7 @@ ffi.cdef(
   typedef struct X509_crl_st X509_CRL;
   typedef struct x509_store_st X509_STORE;
   typedef struct x509_store_ctx_st X509_STORE_CTX;
+  typedef struct x509_purpose_st X509_PURPOSE;
   typedef struct v3_ext_ctx X509V3_CTX;
   typedef struct asn1_string_st ASN1_INTEGER;
   typedef struct asn1_string_st ASN1_ENUMERATED;
@@ -63,5 +64,9 @@ ffi.cdef(
   typedef struct PKCS12_st PKCS12;
   typedef struct ssl_st SSL;
   typedef struct ssl_ctx_st SSL_CTX;
+  typedef struct evp_kdf_st EVP_KDF;
+  typedef struct evp_kdf_ctx_st EVP_KDF_CTX;
+  typedef struct ossl_lib_ctx_st OSSL_LIB_CTX;
+  typedef struct ECDSA_SIG_st ECDSA_SIG;
 ]])
 

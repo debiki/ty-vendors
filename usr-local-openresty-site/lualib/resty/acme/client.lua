@@ -6,7 +6,7 @@ local openssl = require("resty.acme.openssl")
 local encode_base64url = util.encode_base64url
 local decode_base64url = util.decode_base64url
 
-local log = ngx.log
+local log = util.log
 local ngx_ERR = ngx.ERR
 local ngx_INFO = ngx.INFO
 local ngx_DEBUG = ngx.DEBUG
@@ -20,8 +20,10 @@ end
 
 local wait_backoff_series = {1, 1, 2, 3, 5, 8, 13, 21}
 
+local TEST_TRY_NONCE_INFINITELY = not not os.getenv("TEST_TRY_NONCE_INFINITELY")
+
 local _M = {
-  _VERSION = '0.7.1'
+  _VERSION = '0.12.0'
 }
 local mt = {__index = _M}
 
@@ -313,7 +315,7 @@ function _M:post(url, payload, headers, nonce)
       if not nonce then
         log(ngx_WARN, "bad nonce: recoverable error, retrying")
         return self:post(url, payload, headers, resp.headers["Replay-Nonce"])
-      else
+      elseif not TEST_TRY_NONCE_INFINITELY then
         return nil, nil, "bad nonce: failed again, bailing out"
       end
     else
@@ -341,7 +343,7 @@ function _M:new_account()
     }
   end
 
-  if self.eab_required then
+  if self.eab_required and (not self.eab_kid or not self.eab_hmac_key) then
     if not self.eab_handler then
       return nil, "eab_handler undefined while EAB is required by CA"
     end
@@ -473,14 +475,10 @@ function _M:finalize(finalize_url, order_url, csr)
     csr = encode_base64url(csr)
   }
 
-  local resp, headers, err = self:post(finalize_url, payload)
+  local resp, _, err = self:post(finalize_url, payload)
 
   if err then
     return nil, "failed to send finalize request: " .. err
-  end
-
-  if not headers["content-type"] == "application/pem-certificate-chain" then
-    return nil, "wrong content type"
   end
 
   -- Wait until the order is valid: ready to download
@@ -498,6 +496,11 @@ function _M:finalize(finalize_url, order_url, csr)
   local body, headers, err = self:post(order_status.certificate)
   if err then
     return nil, "failed to fetch certificate: " .. err
+  end
+
+  local cert_content_type = headers["content-type"]
+  if cert_content_type and string.sub(cert_content_type, 1, 33):lower() ~= "application/pem-certificate-chain" then
+    return nil, "wrong content type, got " .. cert_content_type
   end
 
   local preferred_chain = self.conf.preferred_chain
@@ -546,7 +549,7 @@ function _M:order_certificate(domain_key, ...)
   -- setup challenges
   local finalize_url = order_body.finalize
   local order_url = order_headers["location"]
-  local authzs = order_body.authorizations
+  local authzs = order_body.authorizations or {}
   local registered_challenges = {}
   local registered_challenge_count = 0
   local has_valid_challenge = false

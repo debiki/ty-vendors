@@ -1,35 +1,35 @@
 # BEGIN lua-resty-http
 
-dist lua-resty-http-0.16.1
+dist lua-resty-http-0.17.1
   aliases resty.http
-  modules lua-resty-http-0.16.1
+  modules lua-resty-http-0.17.1
 
-module lua-resty-http-0.16.1
+module lua-resty-http-0.17.1
   aliases resty.http
-  section 18 13196 lua-resty-http
+  section 18 13725 lua-resty-http
   section 176 358 status
-  section 358 779 features
-  section 779 1471 api
-  section 1270 1471 deprecated
-  section 1471 13196 usage
-  section 2153 2960 single-shot request
-  section 2960 13196 streamed request
-  section 13196 14288 response
-  section 13215 14009 res.body\_reader
-  section 14009 14118 res:read\_body
-  section 14118 14288 res:read\_trailers
-  section 14288 15980 utility
-  section 14306 14946 parse\_uri
-  section 14946 15980 get\_client\_body\_reader
-  section 15980 20066 deprecated
-  section 16092 16607 tcp only connect
-  section 16607 18701 connect\_proxy
-  section 18701 19072 ssl\_handshake
-  section 19072 20066 proxy\_request / proxy\_response
-  section 19415 19777 proxy\_request
-  section 19777 20066 proxy\_response
-  section 20066 20192 author
-  section 20192 21629 licence
+  section 358 844 features
+  section 844 1536 api
+  section 1335 1536 deprecated
+  section 1536 13725 usage
+  section 2218 3025 single-shot request
+  section 3025 13725 streamed request
+  section 13725 14817 response
+  section 13744 14538 res.body\_reader
+  section 14538 14647 res:read\_body
+  section 14647 14817 res:read\_trailers
+  section 14817 16509 utility
+  section 14835 15475 parse\_uri
+  section 15475 16509 get\_client\_body\_reader
+  section 16509 20595 deprecated
+  section 16621 17136 tcp only connect
+  section 17136 19230 connect\_proxy
+  section 19230 19601 ssl\_handshake
+  section 19601 20595 proxy\_request / proxy\_response
+  section 19944 20306 proxy\_request
+  section 20306 20595 proxy\_response
+  section 20595 20721 author
+  section 20721 22158 licence
 
 # END lua-resty-http
 # BEGIN lua-resty-lrucache
@@ -64,243 +64,21 @@ module lua-resty-lrucache-0.08
 # END lua-resty-lrucache
 # BEGIN lua-resty-openssl
 
-dist lua-resty-openssl-0.7.4
+dist lua-resty-openssl-1.2.0
   aliases resty.openssl
-  modules lua-resty-openssl-0.7.4
+  modules lua-resty-openssl-1.2.0 lua-resty-openssl-1.2.0
 
-module lua-resty-openssl-0.7.4
+module lua-resty-openssl-1.2.0
   aliases resty.openssl
-  section 18 421 lua-resty-openssl
-  section 421 752 description
-  section 752 781 status
-  section 781 87190 synopsis
-  section 1696 3557 resty.openssl
-  section 1804 2952 openssl.load_modules
-  section 2952 3300 openssl.luaossl_compat
-  section 3300 3438 openssl.get_fips_mode
-  section 3438 3557 openssl.get_fips_mode
-  section 3557 5519 resty.openssl.version
-  section 3626 3679 version_num
-  section 3679 3731 version_text
-  section 3731 4583 version.version
-  section 4583 5237 version.info
-  section 5237 5331 version.openssl_30
-  section 5331 5425 version.openssl_11
-  section 5425 5519 version.openssl_10
-  section 5519 7521 resty.openssl.provider
-  section 5637 6114 provider.load
-  section 6114 6268 provider.istype
-  section 6268 6405 provider.is_available
-  section 6405 6595 provider.set_default_search_path
-  section 6595 6731 provider:unload
-  section 6731 6947 provider:self_test
-  section 6947 7521 provider:get_params
-  section 7521 22299 resty.openssl.pkey
-  section 8157 10679 pkey.new
-  section 10679 10823 pkey.istype
-  section 10823 12180 pkey.paramgen
-  section 12180 12329 pkey:get_parameters
-  section 12329 14419 pkey:set_parameters
-  section 14419 14595 pkey:is_private
-  section 14595 14944 pkey:get_key_type
-  section 14944 16419 pkey:sign
-  section 16419 18827 pkey:verify
-  section 18827 19422 pkey:encrypt
-  section 19422 20046 pkey:decrypt
-  section 20046 20776 pkey:sign_raw
-  section 20776 21384 pkey:verify_recover
-  section 21384 21737 pkey:derive
-  section 21737 22160 pkey:tostring
-  section 22160 22299 pkey:to_pem
-  section 22299 29501 resty.openssl.bn
-  section 22448 22613 bn.new
-  section 22613 22734 bn.dup
-  section 22734 22872 bn.istype
-  section 22872 23270 bn.from_binary, bn:to_binary
-  section 23270 23741 bn.from_hex, bn:to_hex
-  section 23741 24154 bn.from_dec, bn:to_dec
-  section 24154 24605 bn:to_number
-  section 24605 24976 bn.generate_prime
-  section 24976 25604 bn:__metamethods
-  section 25604 26567 bn:add, bn:sub, bn:mul, bn:div, bn:exp, bn:mod, bn:gcd
-  section 26567 26719 bn:sqr
-  section 26719 27707 bn:mod_add, bn:mod_sub, bn:mod_mul, bn:mod_exp
-  section 27707 27837 bn:mod_sqr
-  section 27837 28044 bn:lshift, bn:rshift
-  section 28044 28315 bn:is_zero, bn:is_one, bn:is_odd, bn:is_word
-  section 28315 29501 bn:is_prime
-  section 29501 36086 resty.openssl.cipher
-  section 29596 29854 cipher.new
-  section 29854 30004 cipher.istype
-  section 30004 30736 cipher:encrypt
-  section 30736 31619 cipher:decrypt
-  section 31619 32287 cipher:init
-  section 32287 32627 cipher:update
-  section 32627 32798 cipher:update_aead_aad
-  section 32798 33131 cipher:get_aead_tag
-  section 33131 33324 cipher:set_aead_tag
-  section 33324 35076 cipher:final
-  section 35076 36086 cipher:derive
-  section 36086 37759 resty.openssl.digest
-  section 36173 36623 digest.new
-  section 36623 36773 digest.istype
-  section 36773 36898 digest:update
-  section 36898 37494 digest:final
-  section 37494 37759 digest:reset
-  section 37759 39286 resty.openssl.hmac
-  section 37866 38180 hmac.new
-  section 38180 38324 hmac.istype
-  section 38324 38443 hmac:update
-  section 38443 39039 hmac:final
-  section 39039 39286 hmac:reset
-  section 39286 42201 resty.openssl.kdf
-  section 39372 42201 kdf.derive
-  section 42201 42815 resty.openssl.objects
-  section 42267 42538 objects.obj2table
-  section 42538 42698 objects.nid2table
-  section 42698 42815 objects.txt2nid
-  section 42815 44773 resty.openssl.pkcs12
-  section 42889 44265 pkcs12.encode
-  section 44265 44773 pkcs12.decode
-  section 44773 44972 resty.openssl.rand
-  section 44854 44972 rand.bytes
-  section 44972 54487 resty.openssl.x509
-  section 45048 45348 x509.new
-  section 45348 45478 x509.dup
-  section 45478 45622 x509.istype
-  section 45622 46007 x509:digest
-  section 46007 46408 x509:pubkey_digest
-  section 46408 46744 x509:check_private_key
-  section 46744 50220 x509:get_i<, x509:set_>
-  section 50220 50379 x509:get_lifetime
-  section 50379 50541 x509:set_lifetime
-  section 50541 50781 x509:get_signature_name, x509:get_signature_nid
-  section 50781 51464 x509:get_extension
-  section 51464 51902 x509:add_extension
-  section 51902 52482 x509:set_extension
-  section 52482 52675 x509:get_extension_critical
-  section 52675 52873 x509:set_extension_critical
-  section 52873 53181 x509:get_ocsp_url
-  section 53181 53484 x509:get_crl_url
-  section 53484 53867 x509:sign
-  section 53867 54127 x509:verify
-  section 54127 54375 x509:tostring
-  section 54375 54487 x509:to_pem
-  section 54487 60328 resty.openssl.x509.csr
-  section 54724 55026 csr.new
-  section 55026 55167 csr.istype
-  section 55167 55500 csr:check_private_key
-  section 55500 57409 csr:get_i<, csr:set_>
-  section 57409 57561 csr:set_subject_alt
-  section 57561 57805 csr:get_signature_name, csr:get_signature_nid
-  section 57805 58236 csr:get_extension
-  section 58236 58392 csr:get_extensions
-  section 58392 58583 csr:add_extension
-  section 58583 58965 csr:set_extension
-  section 58965 59148 csr:get_extension_critical
-  section 59148 59336 csr:set_extension_critical
-  section 59336 59725 csr:sign
-  section 59725 59975 csr:verify
-  section 59975 60229 csr:tostring
-  section 60229 60328 csr:to_pem
-  section 60328 65596 resty.openssl.x509.crl
-  section 60427 60723 crl.new
-  section 60723 60852 crl.dup
-  section 60852 60993 crl.istype
-  section 60993 62775 crl:get_i<, crl:set_>
-  section 62775 63003 crl:get_signature_name, crl:get_signature_nid
-  section 63003 63365 crl:get_extension
-  section 63365 63556 crl:add_extension
-  section 63556 64125 crl:set_extension
-  section 64125 64308 crl:get_extension_critical
-  section 64308 64496 crl:set_extension_critical
-  section 64496 64633 crl:add_revoked
-  section 64633 65006 crl:sign
-  section 65006 65256 crl:verify
-  section 65256 65494 crl:tostring
-  section 65494 65596 crl:to_pem
-  section 65596 68723 resty.openssl.x509.name
-  section 65670 65765 name.new
-  section 65765 65900 name.dup
-  section 65900 66044 name.istype
-  section 66044 66649 name:add
-  section 66649 67483 name:find
-  section 67483 67833 name:tostring
-  section 67833 68723 name:__metamethods
-  section 68723 70553 resty.openssl.x509.altname
-  section 68831 68938 altname.new
-  section 68938 69178 altname.dup
-  section 69178 69335 altname.istype
-  section 69335 69658 altname:add
-  section 69658 70031 altname:tostring
-  section 70031 70553 altname:__metamethods
-  section 70553 75987 resty.openssl.x509.extension
-  section 70637 72907 extension.new
-  section 72907 73064 extension.dup
-  section 73064 73552 extension.from_der
-  section 73552 73856 extension:to_der
-  section 73856 74259 extension.from_data
-  section 74259 74533 extension.to_data
-  section 74533 74692 extension.istype
-  section 74692 74870 extension:get_extension_critical
-  section 74870 75020 extension:set_extension_critical
-  section 75020 75242 extension:get_object
-  section 75242 75881 extension:text
-  section 75881 75987 extension:tostring
-  section 75987 77438 resty.openssl.x509.extension.dist_points
-  section 76108 76219 dist_points.new
-  section 76219 76467 dist_points.dup
-  section 76467 76632 dist_points.istype
-  section 76632 77438 dist_points:__metamethods
-  section 77438 79183 resty.openssl.x509.extension.info_access
-  section 77601 77713 info_access.new
-  section 77713 77963 info_access.dup
-  section 77963 78128 info_access.istype
-  section 78128 78306 info_access:add
-  section 78306 79183 info_access:__metamethods
-  section 79183 80353 resty.openssl.x509.extensions
-  section 79273 79381 extensions.new
-  section 79381 79629 extensions.dup
-  section 79629 79791 extensions.istype
-  section 79791 79966 extensions:add
-  section 79966 80353 extensions:__metamethods
-  section 80353 81470 resty.openssl.x509.chain
-  section 80428 80521 chain.new
-  section 80521 80796 chain.dup
-  section 80796 80943 chain.istype
-  section 80943 81103 chain:add
-  section 81103 81470 chain:__metamethods
-  section 81470 83330 resty.openssl.x509.store
-  section 81570 81663 store.new
-  section 81663 81810 store.istype
-  section 81810 82129 store:use_default
-  section 82129 82336 store:add
-  section 82336 82465 store:load_file
-  section 82465 82791 store:load_directory
-  section 82791 83330 store:verify
-  section 83330 83801 resty.openssl.x509.revoked
-  section 83408 83648 revoked.new
-  section 83648 83801 revoked.istype
-  section 83801 84990 resty.openssl.ssl
-  section 84090 84226 ssl.from_request
-  section 84226 84412 ssl.from_socket
-  section 84412 84692 ssl:get_peer_certificate
-  section 84692 84990 ssl:get_peer_cert_chain
-  section 84990 85629 resty.openssl.ssl_ctx
-  section 85284 85431 ssl_ctx.from_request
-  section 85431 85629 ssl_ctx.from_socket
-  section 85629 87190 functions for stack-like objects
-  section 85674 86338 metamethods
-  section 86338 86733 each
-  section 86733 86879 all
-  section 86879 87028 count
-  section 87028 87190 index
-  section 87190 197651 general rules on garbage collection
-  section 197651 198142 code generation
-  section 198142 198983 compatibility
-  section 198983 199198 credits
-  section 199198 200652 copyright and license
-  section 200652 201452 see also
+  section 18 544 lua-resty-openssl
+  section 544 684 description
+  section 684 713 status
+  section 713 1619 synopsis
+  section 1619 3073 copyright and license
+  section 3073 3871 see also
+
+module lua-resty-openssl-1.2.0
+  aliases resty.openssl
 
 # END lua-resty-openssl
 # BEGIN luafilesystem
@@ -317,37 +95,38 @@ module luafilesystem-0.1
 # END luafilesystem
 # BEGIN lua-resty-acme
 
-dist lua-resty-acme-0.7.1
+dist lua-resty-acme-0.12.0
   aliases resty.acme
-  modules lua-resty-acme-0.7.1 resty.acme.storage.readme
+  modules lua-resty-acme-0.12.0 resty.acme.storage.readme
 
-module lua-resty-acme-0.7.1
+module lua-resty-acme-0.12.0
   aliases resty.acme
   section 18 515 lua-resty-acme
   section 515 1272 description
   section 1272 1301 status
-  section 1301 22594 synopsis
-  section 5972 11506 tls-alpn-01 challenge
-  section 11506 14613 resty.acme.autossl
-  section 14316 14613 autossl.get_certkey
-  section 14613 18878 resty.acme.client
-  section 14641 17889 client.new
-  section 17889 18060 client:init
-  section 18060 18345 client:order_certificate
-  section 18345 18593 client:serve_http_challenge
-  section 18593 18878 client:serve_tls_alpn_challenge
-  section 18878 22594 storage adapters
-  section 19269 19564 file
-  section 19564 19763 shm
-  section 19763 20085 redis
-  section 20085 21757 vault
-  section 21058 21757 support for different auth method
-  section 21757 22086 consul
-  section 22086 22594 etcd
-  section 22594 22659 todo
-  section 22659 22883 credits
-  section 22883 24332 copyright and license
-  section 24332 24853 see also
+  section 1301 24100 synopsis
+  section 6986 12448 tls-alpn-01 challenge
+  section 12448 15923 resty.acme.autossl
+  section 15626 15923 autossl.get_certkey
+  section 15923 20188 resty.acme.client
+  section 15951 19199 client.new
+  section 19199 19370 client:init
+  section 19370 19655 client:order_certificate
+  section 19655 19903 client:serve_http_challenge
+  section 19903 20188 client:serve_tls_alpn_challenge
+  section 20188 24100 storage adapters
+  section 20579 20874 file
+  section 20874 21073 shm
+  section 21073 21539 redis
+  section 21539 23263 vault
+  section 22564 23263 support for different auth method
+  section 23263 23592 consul
+  section 23592 24100 etcd
+  section 24100 24165 todo
+  section 24165 24329 testing
+  section 24329 24553 credits
+  section 24553 26002 copyright and license
+  section 26002 26523 see also
 
 module resty.acme.storage.readme
   section 18 785 resty.acme.storage
