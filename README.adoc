@@ -13,7 +13,9 @@ in the main repo, although no longer in use.
 To upgrade OpenResty, 1) download a new version of OpenResty,
 2) get the PGP key, 3) check the PGP signature,
 4) overwrite `source/` with the new version,
-5) Git-commit the changes, rebuild and test.
+5) Upgrade Dockerfile,
+6) Git-commit the changes, rebuild.
+7) Upgrade Lua packages, run all tests.
 
 
 #### 1) Download OpenResty
@@ -45,7 +47,8 @@ The full key id is apparently `25451EB088460026195BD62CB550E09EA0E98066`.
 
 ##### Fetch key from keyserver
 
-If the key is missing, get the key. However, the instructions on the OpenResty website
+If the key is missing (you'll see a message like: "gpg: error reading key: No public key"),
+then, get the key. However, the instructions on the OpenResty website
 mention only the last 32 bits of the key, but it's
 possible to generate fake keys with matching last 32 bits. In fact,
 someone did (apparently in order to kindly show that it's possible) — look here:
@@ -121,20 +124,43 @@ you haven't signed Yichun's key with a key of your own, GPG logs a warning.
 
 #### 4) Update the source code
 
-Now, move the old `source/` dir, and unzip the new version to `source/`:
+Now, move the old `source/` dir, and unzip the new version to `source/`. Add
+to Git (the signature file too) and commit:
 
   mv source source-old
   git rm -fr source
   tar -xf openresty-1.19.3.1.tar.gz
   mv openresty-1.19.3.1 source
   git add source
+  git add openresty-1.19.3.1.tar.gz.asc
+  git commit -m "Upgrade OpenResty to ____"
 
 Then maybe look at the changes in Git. Delete `source-old/`.
 
 
-#### 5) Commit, rebuild, test
+#### 5) Upgrade Dockerfile
+
+You might need to do some tweaks in ../Dockerfile.or — for example, bumping the
+Alpine OS version.  To find out what to change, find OpenResty's Dockerfile for
+the last version of OpenResty you were using, and the new version, run a diff,
+look at the changes and apply the relevant ones (usually just a few).  Here's the
+Dockerfile: https://github.com/openresty/docker-openresty/blob/master/alpine/Dockerfile
+— click History and look at the older versions.
+
+
+#### 6) Commit, rebuild
 
 Commit the changes in this mobule, images/web/openresty/. Then update Ty's main
 repo (at `../../../`): `git add` and `commit` this submodule.
 
-Rebuild the web image: `s/tyd rebuild web`
+Rebuild the web image: `s/tyd rebuild web`.
+
+
+#### 7) Upgrade Lua packages
+
+You might need to upgrade the OpenResty packages, so you'll get versions that
+work with this new OpenResty version.
+
+See: ../openresty-pkgs/README.adoc  — at the end, you'll rebuild 'web' a second time.
+
+Lastly, run all tests.
