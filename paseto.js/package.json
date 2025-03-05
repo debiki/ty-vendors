@@ -1,0 +1,20 @@
+{
+  "name": "paseto.js",
+  "version": "0.1.7",
+  "description": "PASETO: Platform-Agnostic Security Tokens",
+  "main": "lib/paseto.js",
+  "types": "lib/paseto.d.ts",
+  "author": "Samuel Judson",
+  "license": "MIT",
+  "dependencies": {
+    "libsodium-wrappers-sumo": "0.7.9",
+    "nan": "^2.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.34",
+    "mocha": "^8.3.2"
+  },
+  "scripts": {
+    "test": "./node_modules/.bin/mocha ./test"
+  }
+}

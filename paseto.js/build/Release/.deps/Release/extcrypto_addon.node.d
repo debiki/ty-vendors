@@ -1,0 +1,1 @@
+cmd_Release/extcrypto_addon.node := ln -f "Release/obj.target/extcrypto_addon.node" "Release/extcrypto_addon.node" 2>/dev/null || (rm -rf "Release/extcrypto_addon.node" && cp -af "Release/obj.target/extcrypto_addon.node" "Release/extcrypto_addon.node")
