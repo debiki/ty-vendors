@@ -138,13 +138,50 @@ with the fallback certificate.
 
 Note that C<domain_whitelist> or C<domain_whitelist_callback> must be set to include your domain
 that you wish to server autossl, to prevent potential abuse using fake SNI in SSL handshake.
-C<domain_whitelist> defines a table that includes all domains should be included, and
+
+C<domain_whitelist> defines a table that includes all domains should be included and the CN to be
+used to create cert for. Only a single C<*> is allowed as a wildcard.
+
+
+    domain_whitelist = { "domain1.com", "domain2.com", "domain3.com", "*.domain4.com" },
+
+
+=head2 Wildcard certificates
+
+
+To enable this library to create wildcard certificate, the following requirements must be met:
+
+
+=over
+
+
+=item *
+
+The wildcard domain appear exactly as C<*.somedomain.com> in C<domain_whitelist>.
+
+=item *
+
+C<dns-01> challenge is enabled and a dns provider that has C<domains> matching the domain is configured.
+
+
+=back
+
+Otherwise a non-wildcard certificate will be created as fallback.
+
+By default, the wildcard domain C<*.example.com> will appear in Common Name. When C<wildcard_domain_in_san> is set to C<true> however, a cert with Common Name C<example.com> and Subject Alternate Name C<*.example.com> will be created. Note both C<*.example.com> and C<example.com> should appear in C<dns_provider_accounts>.
+
+
+=head2 Advanced Usage
+
+
+
+=head3 Use a function to include domains
+
+
 C<domain_whitelist_callback> defines a function that accepts domain as parameter and return
 boolean to indicate if it should be included.
 
-    domain_whitelist = { "domain1.com", "domain2.com", "domain3.com" },
-
-To match a pattern in your domain name, for example all subdomains under C<example.com>, use:
+To match a pattern in your domain name, for example B<all> subdomains under C<example.com>, use:
 
 
     domain_whitelist_callback = function(domain, is_new_cert_needed)
@@ -172,6 +209,10 @@ latency.
 
 C<domain_whitelist_callback> function is provided with a second argument,
 which indicates whether the certificate is about to be served on incoming HTTP request (false) or new certificate is about to be requested (true). This allows to use cached values on hot path (serving requests) while fetching fresh data from storage for new certificates. One may also implement different logic, e.g. do extra checks before requesting new cert.
+
+
+=head3 Define failure cooloff period
+
 
 In case of certificate request failure one may want to prevent ACME client to request another certificate immediatelly. By default, the cooloff period it is set to 300 seconds (5 minutes). It may be customized with C<failure_cooloff> or with C<failure_cooloff_callback> function, e.g. to implement exponential backoff.
 
@@ -355,6 +396,70 @@ L<this patch|https://github.com/fffonion/lua-resty-shdict-server/tree/master/pat
 =back
 
 
+=head2 dns-01 challenge
+
+
+DNS-01 challenge is supported on lua-resty-acme E<gt> 0.13.0. Currently, following DNS providers are supported:
+
+
+=over
+
+
+=item *
+
+C<cloudflare>: Cloudflare
+
+=item *
+
+C<dynv6>: Dynv6
+
+=item *
+
+C<dnspod-intl>: Dnspod International (only Dnspod token is supported and use C<id,token> in secret field)
+
+
+=back
+
+To read to how to extend a new DNS provider to work with C<dns-01> challenge, see L<DNS provider>.
+
+An example config to use C<dns-01> challenge would be:
+
+
+    require("resty.acme.autossl").init({
+      -- setting the following to true
+      -- implies that you read and accepted https://letsencrypt.org/repository/
+      tos_accepted = true,
+      -- uncomment following for first time setup
+      -- staging = true,
+      -- uncomment following to enable RSA + ECC double cert
+      -- domain_key_types = { 'rsa', 'ecc' },
+      -- do not set `http-01` or `tls-alpn-01` if you only plan to use dns-01.
+      enabled_challenge_handlers = { 'dns-01' },
+      account_key_path = "/etc/openresty/account.key",
+      account_email = "youemail@youdomain.com",
+      domain_whitelist = { "example.com", "subdomain.anotherdomain.com" },
+    
+      dns_provider_accounts = {
+        {
+          name = "cloudflare_prod",
+          provider = "cloudflare",
+          secret = "apikey of cloudflare",
+          domains = { "example.com" },
+        },
+        {
+          name = "dynv6_staging",
+          provider = "dynv6",
+          secret = "apikey of dynv6",
+          domains = { "*.anotherdomain.com" },
+        },
+      },
+      -- uncomment following to create anotherdomain.com in CN and *.anotherdomain.com in SAN
+      -- wildcard_domain_in_san = true,
+    })
+
+By default, this library tries up to 5 minutes for DNS propagation. If the default TTL for dns provider is longer than that, user may want to tune up C<challenge_start_delay> manually to wait longer.
+
+
 =head2 resty.acme.autossl
 
 
@@ -405,6 +510,18 @@ A config table can be passed to C<resty.acme.autossl.init()>, the default values
       challenge_start_delay = 0,
       -- if true, the request to nginx waits until the cert has been generated and it is used right away
       blocking = false,
+      -- if true, the certificate for domain not in whitelist will be deleted from storage
+      enabled_delete_not_whitelisted_domain = false,
+      -- the dict of dns providers, each provider should have following struct:
+      -- {
+      --   name = "prod_account",
+      --   provider = "provider_name", -- "cloudflare" or "dynv6"
+      --   secret  = "the api key or token",
+      --   domains = { "example.com", "*.example.com" }, -- the list of domains that can be used with this provider
+      -- }
+      dns_provider_accounts = {},
+      -- if enabled, wildcard domains like *.example.com will be created as SAN and CN will be example.com
+      wildcard_domain_in_san = false,
     }
 
 If C<account_key_path> is not specified, a new account key will be created
@@ -490,6 +607,8 @@ Default values for C<config> are:
       preferred_chain = nil,
       -- callback function that allows to wait before signaling ACME server to validate
       challenge_start_callback = nil,
+      -- the dict of dns providers, each provider should have following struct:
+      dns_provider_accounts = {},
     }
 
 If C<account_kid> is omitted, user must call C<client:new_account()> to register a
@@ -756,6 +875,43 @@ Etcd storage requires L<lua-resty-etcd|https://github.com/api7/lua-resty-etcd> l
 It can be manually installed with C<opm install api7/lua-resty-etcd> or C<luarocks install lua-resty-etcd>.
 
 
+=head2 DNS providers
+
+
+TO create a custom DNS provider, follow these steps:
+
+
+=over
+
+
+=item *
+
+Create a file like C<route53.lua> under C<lib/resty/acme/dns_provider>
+
+=item *
+
+Implement following function signature
+
+
+=back
+
+
+    function _M.new(token)
+      -- ... 
+      return self
+    end
+    
+    function _M:post_txt_record(fqdn, content)
+      return ok, err
+    end
+    
+    function _M:delete_txt_record(fqdn)
+      return ok, err
+    end
+
+Where C<token> is the apikey, C<fqdn> is the DNS record name to set record, and C<content> is the value of the record.
+
+
 =head1 TODO
 
 
@@ -794,6 +950,10 @@ Improvements of C<file> storage by L<@dbalagansky|https://github.com/dbalagansky
 =item *
 
 Addition of kubernetes auth in 'vault' storage by L<@UXabre|https://github.com/UXabre/>
+
+=item *
+
+Initial support of C<dns-01> challenge by L<@yuweizzz|https://github.com/yuweizzz>
 
 
 =back

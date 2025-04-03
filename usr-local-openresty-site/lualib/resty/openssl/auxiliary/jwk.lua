@@ -177,6 +177,7 @@ function _M.load_jwk(txt)
     if key ~= nil then
       return key
     end
+    key_free = function() end
   else
     return nil, "not yet supported jwk type \"" .. (tbl["kty"] or "nil") .. "\""
   end
@@ -245,9 +246,11 @@ function _M.dump_jwk(pkey, is_priv)
     jwk = {
       kty = "OKP",
       crv = ecx_curves_reverse[pkey.key_type],
-      d = encode_base64url(params.private),
       x = encode_base64url(params.public),
     }
+    if is_priv then
+      jwk.d = encode_base64url(params.private)
+    end
   else
     return nil, "jwk.dump_jwk: not implemented for this key type"
   end

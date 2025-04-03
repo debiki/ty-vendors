@@ -23,7 +23,7 @@ local wait_backoff_series = {1, 1, 2, 3, 5, 8, 13, 21}
 local TEST_TRY_NONCE_INFINITELY = not not os.getenv("TEST_TRY_NONCE_INFINITELY")
 
 local _M = {
-  _VERSION = '0.12.0'
+  _VERSION = '0.14.0'
 }
 local mt = {__index = _M}
 
@@ -54,6 +54,8 @@ local default_config = {
   preferred_chain = nil,
   -- callback function that allows to wait before signaling ACME server to validate
   challenge_start_callback = nil,
+  -- the dict of dns providers, each provider should have following struct:
+  dns_provider_accounts = {},
 }
 
 local function new_httpc()
@@ -90,7 +92,7 @@ function _M.new(conf)
       eab_handler = conf.eab_handler,
       eab_kid = conf.eab_kid,
       eab_hmac_key = decode_base64url(conf.eab_hmac_key),
-      challenge_handlers = {}
+      challenge_handlers = {},
     }, mt
   )
 
@@ -114,6 +116,12 @@ function _M.new(conf)
   for _, c in ipairs(conf.enabled_challenge_handlers) do
     local handler = require("resty.acme.challenge." .. c)
     self.challenge_handlers[c] = handler.new(self.storage)
+    if c == "dns-01" then
+      local ok, err = self.challenge_handlers[c]:update_dns_provider_info(self.conf.dns_provider_accounts)
+      if not ok then
+        return nil, err
+      end
+    end
   end
 
   if conf.account_key then
