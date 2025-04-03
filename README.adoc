@@ -59,13 +59,19 @@ cd images/web/openresty-pkgs/
 git rm -fr ./usr-local-openresty-site
 mv ./new ./usr-local-openresty-site
 git add ./usr-local-openresty-site
+git commit -m "Upgrade lua-resty-acme, for OpenResty X.Y."
+
+# Review the changes. Then:
+git push origin ...
+
+cd ../../..
+git add images/web/openresty-pkgs
+git commit -m "Upd OpenResty packages submod, for OpenResty X.Y."
 ----
 
 Comment out the read-write mount from  in docker-compose.yml again.
 
-Commit. Review the Git diff. Update this submodule (openresty-pkgs) in the main repo.
-
-Lastly, rebuild the Web container, so the new packages get copied into it:
+Lastly, rebuild the Web image, so the new packages get copied into it:
 
 ----
 # In the project base dir:
