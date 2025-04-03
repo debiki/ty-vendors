@@ -640,7 +640,7 @@ B<syntax:> zone_sync_ssl_protocols I<
     [C<TLSv1.3>]>
 
 
-B<default:> I<TLSv1 TLSv1.1 TLSv1.2>
+B<default:> I<TLSv1.2 TLSv1.3>
 
 
 B<context:> I<stream>

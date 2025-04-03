@@ -11,17 +11,43 @@ ngx_mgmt_module - Module ngx_mgmt_module
 
 
 
-The C<ngx_mgmt_module> module enables reporting of
-current nginx installation to
-L<NGINX
-Management Suite Instance Manager|https://docs.nginx.com/nginx-management-suite/about/> (1.25.3).
-By default, nginx sends usage info
-to the Instance Manager located at C<nginx-mgmt.local>
-every 30 minutes using the SSL connection.
-The system resolver is used unless
-a custom resolver is configured
-and is invoked only once when the
-configuration is L<loaded|beginners_guide>.
+The C<ngx_mgmt_module> module enables
+NGINX Plus license verification and usage reporting.
+This is mandatory for each
+L<C<nginxE<sol>1.27.2
+(nginx-plus-r33)>|https://docs.nginx.com/nginx/releases/#nginxplusrelease-33-r33> instance.
+
+
+
+
+
+A JWT license file named C<license.jwt>
+should be located at
+C<E<sol>etcE<sol>nginxE<sol>> for Linux or
+C<E<sol>usrE<sol>localE<sol>etcE<sol>nginxE<sol>> for FreeBSD
+or at the path specified by the L</license_token> directive.
+The license file is available from
+L<MyF5|https://my.f5.com>.
+
+
+
+
+
+Usage report is sent to F5 licensing endpoint
+every hour using the
+secure connection.
+Optionally, in network-restricted environments
+reporting can be configured to
+L<F5 NGINX
+Instance Manager|https://docs.nginx.com/nginx-management-suite/about/> from which the report can be sent
+to F5 licensing endpoint.
+
+
+
+
+
+By default, if the initial usage report
+is not received by F5 licensing endpoint, nginx will stop processing traffic.
 
 
 
@@ -44,22 +70,11 @@ commercial subscription.
 
     
     mgmt {
-        usage_report endpoint=nginx-mgmt.local interval=30m;
-        resolver     DNS_IP;
+        # in case if custom path is required
+        license_token custom/file/path/license.jwt;
     
-        uuid_file /var/lib/nginx/nginx.id;
-    
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers   DEFAULT;
-    
-        ssl_certificate     client_cert.pem;
-        ssl_certificate_key client_cert.key;
-    
-        # configure server certificate verification
-        # to validate the authenticity of NMS
-        ssl_trusted_certificate  trusted_ca_cert.crt;
-        ssl_verify               on;
-        ssl_verify_depth         2;
+        # in case of reporting to NGINX Instance Manager
+        usage_report endpoint=NIM_FQDN;
     }
 
 
@@ -68,29 +83,6 @@ commercial subscription.
 
 
 =head1 Directives
-
-=head2 connect_timeout
-
-
-B<syntax:> connect_timeout I<I<C<time>>>
-
-
-B<default:> I<15s>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Defines a timeout for establishing a connection with the Instance Manager.
-
-
-
-
-
-
 
 =head2 mgmt
 
@@ -105,8 +97,9 @@ B<context:> I<main>
 
 
 
-Provides the configuration file context
-in which the management server directives are specified.
+Provides the configuration file context in which
+usage reporting and license management directives
+are specified.
 
 
 
@@ -114,26 +107,69 @@ in which the management server directives are specified.
 
 
 
-=head2 read_timeout
+=head2 enforce_initial_report
 
 
-B<syntax:> read_timeout I<I<C<time>>>
+B<syntax:> enforce_initial_report I<C<on> E<verbar> C<off>>
 
 
-B<default:> I<60s>
+B<default:> I<on>
 
 
 B<context:> I<mgmt>
 
 
 
+This directive appeared in version 1.27.2.
 
 
-Defines a timeout for reading a response from the Instance Manager.
-The timeout is set only between two successive read operations,
-not for the transmission of the whole response.
-If the Instance Manager does not transmit anything within this time,
-the connection is closed.
+
+
+
+Enables or disables the 180-day grace period
+for sending the initial usage report.
+
+
+
+
+
+The initial usage report is sent immediately
+upon nginx first start after installation.
+By default, if the initial report is not received by F5 licensing endpoint,
+nginx stops processing traffic until the report is successfully delivered.
+Setting the directive value to C<off> enables
+the 180-day grace period during which
+the initial usage report must be received by F5 licensing endpoint.
+
+
+
+
+
+
+
+=head2 license_token
+
+
+B<syntax:> license_token I<I<C<file>>>
+
+
+B<default:> I<license.jwt>
+
+
+B<context:> I<mgmt>
+
+
+
+This directive appeared in version 1.27.2.
+
+
+
+
+
+Specifies a JWT license I<C<file>>.
+By default, the I<C<license.jwt>> file is expected to be at
+C<E<sol>etcE<sol>nginxE<sol>> for Linux or at
+C<E<sol>usrE<sol>localE<sol>etcE<sol>nginxE<sol>> for FreeBSD.
 
 
 
@@ -159,203 +195,14 @@ B<context:> I<mgmt>
 
 
 
-Configures name servers used to resolve names of the Instance Manager
-into addresses, for example:
+Configures name servers used to resolve usage reporting endpoint name.
+By default, the system resolver is used.
 
-    
-    resolver 127.0.0.1 [::1]:5353;
 
 
-The address can be specified as a domain name or IP address,
-with an optional port.
-If port is not specified, the port 53 is used.
-Name servers are queried in a round-robin fashion.
 
 
-
-
-
-By default, nginx will look up both IPv4 and IPv6 addresses while resolving.
-If looking up of IPv4 or IPv6 addresses is not desired,
-the C<ipv4=off> or
-the C<ipv6=off> parameter can be specified.
-
-
-
-
-
-By default, nginx caches answers using the TTL value of a response.
-An optional C<valid> parameter allows overriding it:
-
-    
-    resolver 127.0.0.1 [::1]:5353 valid=30s;
-
-
-
-B<NOTE>
-
-To prevent DNS spoofing, it is recommended
-configuring DNS servers in a properly secured trusted local network.
-
-
-
-
-
-
-The optional C<status_zone> parameter
-enables
-L<collection|ngx_http_api_module>
-of DNS server statistics of requests and responses
-in the specified I<C<zone>>.
-
-
-
-
-
-
-
-=head2 resolver_timeout
-
-
-B<syntax:> resolver_timeout I<I<C<time>>>
-
-
-B<default:> I<30s>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Sets a timeout for name resolution.
-
-
-
-
-
-
-
-=head2 send_timeout
-
-
-B<syntax:> send_timeout I<I<C<time>>>
-
-
-B<default:> I<60s>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Sets a timeout for transmitting a request to the Instance Manager.
-The timeout is set only between two successive write operations,
-not for the transmission of the whole request.
-If the Instance Manager does not receive anything within this time,
-the connection is closed.
-
-
-
-
-
-
-
-=head2 ssl
-
-
-B<syntax:> ssl I<C<on> E<verbar> C<off>>
-
-
-B<default:> I<on>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Enables the HTTPS protocol for all
-connections to the Instance Manager.
-
-
-
-
-
-
-
-=head2 ssl_certificate
-
-
-B<syntax:> ssl_certificate I<I<C<file>>>
-
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Specifies a I<C<file>> with the certificate in the PEM format
-used for authentication to the Instance Manager.
-
-
-
-
-
-
-
-=head2 ssl_certificate_key
-
-
-B<syntax:> ssl_certificate_key I<I<C<file>>>
-
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Specifies a I<C<file>> with the secret key in the PEM format
-used for authentication to the Instance Manager.
-
-
-
-
-
-
-
-=head2 ssl_ciphers
-
-
-B<syntax:> ssl_ciphers I<I<C<ciphers>>>
-
-
-B<default:> I<DEFAULT>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Specifies the enabled ciphers for requests to the Instance Manager.
-The ciphers are specified in the format understood by the OpenSSL library.
-
-
-
-
-
-The full list can be viewed using the
-“C<openssl ciphers>” command.
+See L<ngx_http_core_module> for details.
 
 
 
@@ -378,113 +225,7 @@ B<context:> I<mgmt>
 
 Specifies a I<C<file>> with revoked certificates (CRL)
 in the PEM format used to verify
-the certificate of the Instance Manager.
-
-
-
-
-
-
-
-=head2 ssl_name
-
-
-B<syntax:> ssl_name I<I<C<name>>>
-
-
-B<default:> I<ssl_name host>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Allows overriding the server name used to
-verify
-the certificate of the Instance Manager and to be
-passed through SNI
-when establishing a connection with the Instance Manager.
-
-
-
-
-
-
-
-=head2 ssl_password_file
-
-
-B<syntax:> ssl_password_file I<I<C<file>>>
-
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Specifies a I<C<file>> with passphrases for
-secret keys
-where each passphrase is specified on a separate line.
-Passphrases are tried in turn when loading the key.
-
-
-
-
-
-
-
-=head2 ssl_protocols
-
-
-B<syntax:> ssl_protocols I<
-    [C<SSLv2>]
-    [C<SSLv3>]
-    [C<TLSv1>]
-    [C<TLSv1.1>]
-    [C<TLSv1.2>]
-    [C<TLSv1.3>]>
-
-
-B<default:> I<TLSv1 TLSv1.1 TLSv1.2 TLSv1.3>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Enables the specified protocols for requests to the Instance Manager.
-
-
-
-
-
-
-
-=head2 ssl_server_name
-
-
-B<syntax:> ssl_server_name I<C<on> E<verbar> C<off>>
-
-
-B<default:> I<off>
-
-
-B<context:> I<mgmt>
-
-
-
-
-
-Enables or disables passing of the server name through
-L<TLS
-Server Name Indication extension|http://en.wikipedia.org/wiki/Server_Name_Indication> (SNI, RFC 6066)
-when establishing a connection with the Instance Manager.
+the certificate of the usage reporting endpoint.
 
 
 
@@ -498,6 +239,8 @@ when establishing a connection with the Instance Manager.
 B<syntax:> ssl_trusted_certificate I<I<C<file>>>
 
 
+B<default:> I<system CA bundle>
+
 
 B<context:> I<mgmt>
 
@@ -507,7 +250,7 @@ B<context:> I<mgmt>
 
 Specifies a I<C<file>> with trusted CA certificates in the PEM format
 used to verify
-the certificate of the Instance Manager.
+the certificate of the usage reporting endpoint.
 
 
 
@@ -521,7 +264,7 @@ the certificate of the Instance Manager.
 B<syntax:> ssl_verify I<C<on> E<verbar> C<off>>
 
 
-B<default:> I<off>
+B<default:> I<on>
 
 
 B<context:> I<mgmt>
@@ -530,7 +273,16 @@ B<context:> I<mgmt>
 
 
 
-Enables or disables verification of the Instance Manager certificate.
+Enables or disables verification of the usage reporting endpoint certificate.
+
+
+
+
+
+
+B<NOTE>
+
+Before 1.27.2, the default value was C<off>.
 
 
 
@@ -538,22 +290,30 @@ Enables or disables verification of the Instance Manager certificate.
 
 
 
-=head2 ssl_verify_depth
+
+=head2 state_path
 
 
-B<syntax:> ssl_verify_depth I<I<C<number>>>
+B<syntax:> state_path I<I<C<path>>>
 
-
-B<default:> I<1>
 
 
 B<context:> I<mgmt>
 
 
 
+This directive appeared in version 1.27.2.
 
 
-Sets the verification depth in the Instance Manager certificates chain.
+
+
+
+Defines a directory for storing state files
+(C<nginx-mgmt-*>)
+created by the C<ngx_mgmt_module> module.
+The default directory
+for Linux is C<E<sol>varE<sol>libE<sol>nginxE<sol>state>,
+for FreeBSD is C<E<sol>varE<sol>dbE<sol>nginxE<sol>state>.
 
 
 
@@ -568,33 +328,7 @@ B<syntax:> usage_report I< [C<endpoint>=I<C<address>>]
          [C<interval>=I<C<time>>]>
 
 
-
-B<context:> I<mgmt>
-
-
-
-
-
-Sets the I<C<address>> and I<C<port>> for IP,
-or the I<C<path>> for a UNIX-domain socket on which
-the Instance Manager is installed,
-by default C<nginx-mgmt.local>.
-The C<interval> sets an interval between reports
-to the Instance Manager, by default 30m.
-
-
-
-
-
-
-
-=head2 uuid_file
-
-
-B<syntax:> uuid_file I<I<C<file>>>
-
-
-B<default:> I<logsE<sol>uuid>
+B<default:> I<endpoint=product.connect.nginx.com interval=1h>
 
 
 B<context:> I<mgmt>
@@ -603,25 +337,17 @@ B<context:> I<mgmt>
 
 
 
-Specifies a I<C<file>> that keeps the ID of nginx instance.
+Sets the I<C<address>> and I<C<port>>
+of the usage reporting endpoint.
+The C<interval> parameter sets an interval between
+two consecutive reports.
 
+B<NOTE>
 
+Before 1.27.2, the default values were
+C<nginx-mgmt.local> and
+C<30m>.
 
-
-
-Examples:
-
-    
-    state /var/lib/nginx/nginx.id; # path for Linux
-    state /var/db/nginx/nginx.id;  # path for FreeBSD
-
-
-
-
-
-
-
-Changing the file content directly should be avoided.
 
 
 

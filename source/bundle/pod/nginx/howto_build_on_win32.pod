@@ -22,7 +22,7 @@ To build nginx on the Microsoft Win32 E<copy> platform you need:
 =item *
 
 Microsoft Visual C compiler. Microsoft Visual Studio E<copy>
-8 and 10 are known to work.
+8, 10, 17 are known to work.
 
 
 
@@ -43,7 +43,7 @@ or L<Strawberry Perl|http://strawberryperl.com>.
 
 =item *
 
-L<Mercurial|https://www.mercurial-scm.org> client.
+L<Git|https://cli.github.com/> client.
 
 
 
@@ -65,7 +65,7 @@ and L<OpenSSL|http://www.openssl.org> libraries sources.
 
 
 
-Ensure that paths to Perl, Mercurial and MSYS bin directories are added to
+Ensure that paths to Perl, Git and MSYS bin directories are added to
 PATH environment variable before you start build. To set Visual C environment
 run vcvarsall.bat script from Visual C directory.
 
@@ -89,10 +89,10 @@ Start MSYS bash.
 
 =item *
 
-Check out nginx sources from the hg.nginx.org repository. For example:
+Check out nginx sources from the GitHub repository:
 
     
-    hg clone http://hg.nginx.org/nginx
+    git clone https://github.com/nginx/nginx.git
 
 
 
@@ -108,8 +108,8 @@ sources into lib directory:
     mkdir objs/lib
     cd objs/lib
     tar -xzf ../../pcre2-10.39.tar.gz
-    tar -xzf ../../zlib-1.3.tar.gz
-    tar -xzf ../../openssl-3.0.10.tar.gz
+    tar -xzf ../../zlib-1.3.1.tar.gz
+    tar -xzf ../../openssl-3.0.14.tar.gz
 
 
 
@@ -136,8 +136,8 @@ Run configure script:
         --http-uwsgi-temp-path=temp/uwsgi_temp \
         --with-cc-opt=-DFD_SETSIZE=1024 \
         --with-pcre=objs/lib/pcre2-10.39 \
-        --with-zlib=objs/lib/zlib-1.3 \
-        --with-openssl=objs/lib/openssl-3.0.10 \
+        --with-zlib=objs/lib/zlib-1.3.1 \
+        --with-openssl=objs/lib/openssl-3.0.14 \
         --with-openssl-opt=no-asm \
         --with-http_ssl_module
 

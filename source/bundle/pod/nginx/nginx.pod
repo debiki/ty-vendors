@@ -37,7 +37,7 @@ L<beginners_guide>
 
 =item *
 
-L<Admin’s Guide|https://www.nginx.com/resources/admin-guide/>
+L<Admin’s Guide|https://docs.nginx.com/nginx/admin-guide/>
 
 
 
@@ -203,7 +203,7 @@ L<howto_build_on_win32>
 
 =item *
 
-L<Setting up NGINX Plus environment on Amazon EC2|https://www.nginx.com/resources/admin-guide/setting-nginx-plus-environment-amazon-ec2/>
+L<Installing NGINX Plus AMIs on Amazon EC2|https://docs.nginx.com/nginx/admin-guide/installing-nginx/installing-nginx-plus-amazon-web-services/>
 
 
 
@@ -831,6 +831,12 @@ L<ngx_stream_mqtt_filter_module|ngx_stream_mqtt_filter_module>
 
 =item *
 
+L<ngx_stream_pass_module|ngx_stream_pass_module>
+
+
+
+=item *
+
 L<ngx_stream_proxy_module|ngx_stream_proxy_module>
 
 
@@ -918,6 +924,20 @@ L<ngx_google_perftools_module|ngx_google_perftools_module>
 =item *
 
 L<ngx_mgmt_module|ngx_mgmt_module>
+
+
+
+=back
+
+
+
+
+
+
+
+
+=over
+
 
 
 

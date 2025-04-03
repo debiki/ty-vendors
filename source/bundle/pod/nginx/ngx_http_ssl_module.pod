@@ -35,7 +35,7 @@ L<OpenSSL|http://www.openssl.org> library.
 
 
 
-To reduce the processor load it is recommended to
+To reduce the processor load, it is recommended to
 
 =over
 
@@ -93,7 +93,7 @@ and possibly increase the session lifetime
             listen              443 ssl;
             <emphasis>keepalive_timeout   70;</emphasis>
     
-            ssl_protocols       TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
+            ssl_protocols       TLSv1.2 TLSv1.3;
             ssl_ciphers         AES128-SHA:AES256-SHA:RC4-SHA:DES-CBC3-SHA:RC4-MD5;
             ssl_certificate     /usr/local/nginx/conf/cert.pem;
             ssl_certificate_key /usr/local/nginx/conf/cert.key;
@@ -272,10 +272,130 @@ L<error log|ngx_core_module>.
 
 
 
-It should be kept in mind that due to the HTTPS protocol limitations
-for maximum interoperability virtual servers should listen on
+It should be kept in mind that due to the SSLE<sol>TLS protocol limitations,
+for maximum interoperability with clients that do not use
+L<SNI|http://en.wikipedia.org/wiki/Server_Name_Indication>,
+virtual servers with different certificates should listen on
 L<different
 IP addresses|configuring_https_servers>.
+
+
+
+
+
+
+
+=head2 ssl_certificate_cache
+
+
+B<syntax:> ssl_certificate_cache I<C<off>>
+
+
+B<syntax:> ssl_certificate_cache I<
+    C<max>=I<C<N>>
+    [C<inactive>=I<C<time>>]
+    [C<valid>=I<C<time>>]>
+
+
+B<default:> I<off>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.27.4.
+
+
+
+
+
+Defines a cache that stores
+SSL certificates and
+secret keys
+specified with variables.
+
+
+
+
+
+The directive has the following parameters:
+
+=over
+
+
+
+=item 
+C<max>
+
+
+
+
+
+sets the maximum number of elements in the cache;
+on cache overflow the least recently used (LRU) elements are removed;
+
+
+
+=item 
+C<inactive>
+
+
+
+
+
+defines a time after which an element is removed from the cache
+if it has not been accessed during this time;
+by default, it is 10 seconds;
+
+
+
+=item 
+C<valid>
+
+
+
+
+
+defines a time during which
+an element in the cache is considered valid
+and can be reused;
+by default, it is 60 seconds.
+Certificates that exceed this time will be reloaded or revalidated;
+
+
+
+=item 
+C<off>
+
+
+
+
+
+disables the cache.
+
+
+
+
+=back
+
+
+
+
+
+
+
+Example:
+
+    
+    ssl_certificate       $ssl_server_name.crt;
+    ssl_certificate_key   $ssl_server_name.key;
+    ssl_certificate_cache max=1000 inactive=20s valid=1m;
+
+
 
 
 
@@ -685,6 +805,49 @@ it is important to include the curves used in the certificates.
 
 
 
+=head2 ssl_key_log
+
+
+B<syntax:> ssl_key_log I<path>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.27.2.
+
+
+
+
+
+Enables logging of client connection SSL keys
+and specifies the path to the key log file.
+Keys are logged in the
+L<SSLKEYLOGFILE|https://datatracker.ietf.org/doc/html/draft-ietf-tls-keylogfile>
+format compatible with Wireshark.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 ssl_ocsp
 
 
@@ -775,7 +938,8 @@ This directive appeared in version 1.19.0.
 Sets C<name> and C<size> of the cache
 that stores client certificates status for OCSP validation.
 The cache is shared between all worker processes.
-A cache with the same name can be used in several virtual servers.
+A cache with the same name can be used in several
+virtual servers.
 
 
 
@@ -907,8 +1071,8 @@ B<context:> I<server>
 
 
 
-Specifies that server ciphers should be preferred over client
-ciphers when using the SSLv3 and TLS protocols.
+Specifies that server ciphers should be preferred over client ciphers
+when the SSLv3 and TLS protocols are used.
 
 
 
@@ -928,7 +1092,7 @@ B<syntax:> ssl_protocols I<
     [C<TLSv1.3>]>
 
 
-B<default:> I<TLSv1 TLSv1.1 TLSv1.2 TLSv1.3>
+B<default:> I<TLSv1.2 TLSv1.3>
 
 
 B<context:> I<http>
@@ -1106,7 +1270,8 @@ a cache shared between all worker processes.
 The cache size is specified in bytes; one megabyte can store
 about 4000 sessions.
 Each shared cache should have an arbitrary name.
-A cache with the same name can be used in several virtual servers.
+A cache with the same name can be used in several
+virtual servers.
 It is also used to automatically generate, store, and
 periodically rotate TLS session ticket keys (1.23.2)
 unless configured explicitly

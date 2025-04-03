@@ -259,6 +259,13 @@ redirect|ngx_http_core_module> happens during request processing.
 
 =item *
 
+The E<sol>license data
+were added in version 9 (1.27.2).
+
+
+
+=item *
+
 The E<sol>workersE<sol> data
 were added in version 9.
 
@@ -372,7 +379,6 @@ were added in version 2.
 
 
 =back
-
 
 
 

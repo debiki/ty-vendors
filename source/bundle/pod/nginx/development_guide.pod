@@ -3405,7 +3405,7 @@ which is processed late in the event loop — after all IE<sol>O and timer
 events are already handled.
 The function C<ngx_event_process_posted()> is called to process
 an event queue.
-It calls event handlers until the queue is not empty.
+It calls event handlers until the queue is empty.
 This means that a posted event handler can post more events to be processed
 within the current event loop iteration.
 
@@ -8480,7 +8480,7 @@ The implementation is provided by the round-robin balancing method.
 
 
 The
-L<nginx-dev-examples|http://hg.nginx.org/nginx-dev-examples>
+L<nginx-dev-examples|https://github.com/nginx/nginx-dev-examples>
 repository provides nginx module examples.
 
 
@@ -9545,7 +9545,7 @@ requests, but may contain other nginx directives.
 An example of such approach is the
 L<ngx_http_auth_request_module>
 directive implemented in
-L<ngx_http_auth_request module|http://hg.nginx.org/nginx/file/tip/src/http/modules/ngx_http_auth_request_module.c>.
+L<ngx_http_auth_request module|https://github.com/nginx/nginx/blob/master/src/http/modules/ngx_http_auth_request_module.c>.
 
 
 
@@ -9554,7 +9554,7 @@ L<ngx_http_auth_request module|http://hg.nginx.org/nginx/file/tip/src/http/modul
 For the second case, it is possible to use basic HTTP client functionality
 available in nginx.
 For example,
-L<OCSP module|http://hg.nginx.org/nginx/file/tip/src/event/ngx_event_openssl_stapling.c>
+L<OCSP module|https://github.com/nginx/nginx/blob/master/src/event/ngx_event_openssl_stapling.c>
 implements simple HTTP client.
 
 

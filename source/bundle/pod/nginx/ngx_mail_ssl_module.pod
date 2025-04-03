@@ -18,14 +18,14 @@ support for a mail proxy server to work with the SSLE<sol>TLS protocol.
 
 
 
-This module is not built by default, it should be enabled with
-the C<--with-mail_ssl_module>
+This module is not built by default, it should be enabled with the
+C<--with-mail_ssl_module>
 configuration parameter.
 
 B<NOTE>
 
-This module requires the L<OpenSSL|http://www.openssl.org>
-library.
+This module requires the
+L<OpenSSL|http://www.openssl.org> library.
 
 
 
@@ -84,7 +84,7 @@ and possibly increase the session lifetime
         server {
             listen              993 ssl;
     
-            ssl_protocols       TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
+            ssl_protocols       TLSv1.2 TLSv1.3;
             ssl_ciphers         AES128-SHA:AES256-SHA:RC4-SHA:DES-CBC3-SHA:RC4-MD5;
             ssl_certificate     /usr/local/nginx/conf/cert.pem;
             ssl_certificate_key /usr/local/nginx/conf/cert.key;
@@ -179,7 +179,9 @@ to load certificates of different types, for example, RSA and ECDSA:
 
 B<NOTE>
 
-Only OpenSSL 1.0.2 or higher supports separate certificate chains
+Only OpenSSL 1.0.2 or higher supports separate
+L<certificate
+chains|configuring_https_servers>
 for different certificates.
 With older versions, only one certificate chain can be used.
 
@@ -191,7 +193,8 @@ With older versions, only one certificate chain can be used.
 The value
 C<data>:I<C<certificate>>
 can be specified instead of the I<C<file>> (1.15.10),
-which loads a certificate without using intermediate files.
+which loads a certificate
+without using intermediate files.
 Note that inappropriate use of this syntax may have its security implications,
 such as writing secret key data to
 L<error log|ngx_core_module>.
@@ -644,7 +647,7 @@ B<syntax:> ssl_protocols I<
     [C<TLSv1.3>]>
 
 
-B<default:> I<TLSv1 TLSv1.1 TLSv1.2 TLSv1.3>
+B<default:> I<TLSv1.2 TLSv1.3>
 
 
 B<context:> I<mail>

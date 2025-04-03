@@ -282,23 +282,6 @@ marks the server as permanently unavailable.
 
 
 
-
-=back
-
-
-
-
-
-
-
-Additionally,
-the following parameters are available as part of our
-commercial subscription:
-
-=over
-
-
-
 =item 
 C<resolve>
 
@@ -318,6 +301,17 @@ the C<resolver> directive
 must be specified in the
 L<stream|ngx_stream_core_module> block
 or in the corresponding upstream block.
+
+
+
+
+
+
+B<NOTE>
+
+Prior to version 1.27.3, this parameter was available only as part of our
+commercial subscription.
+
 
 
 
@@ -375,6 +369,34 @@ high-priority SRV records are resolved as backup servers,
 the rest of SRV records are ignored.
 
 
+
+
+
+
+B<NOTE>
+
+Prior to version 1.27.3, this parameter was available only as part of our
+commercial subscription.
+
+
+
+
+
+
+
+=back
+
+
+
+
+
+
+
+Additionally,
+the following parameters are available as part of our
+commercial subscription:
+
+=over
 
 
 
@@ -757,7 +779,7 @@ B<context:> I<upstream>
 
 
 
-This directive appeared in version 1.17.5.
+This directive appeared in version 1.27.3.
 
 
 
@@ -806,11 +828,13 @@ configuring DNS servers in a properly secured trusted local network.
 
 
 
-The optional C<status_zone> parameter
+The optional C<status_zone> parameter (1.17.5)
 enables
 L<collection|ngx_http_api_module>
 of DNS server statistics of requests and responses
 in the specified I<C<zone>>.
+The parameter is available as part of our
+commercial subscription.
 
 
 
@@ -819,7 +843,8 @@ in the specified I<C<zone>>.
 
 B<NOTE>
 
-This directive is available as part of our
+Since version 1.17.5 and prior to version 1.27.3,
+this directive was available only as part of our
 commercial subscription.
 
 
@@ -842,7 +867,7 @@ B<context:> I<upstream>
 
 
 
-This directive appeared in version 1.17.5.
+This directive appeared in version 1.27.3.
 
 
 
@@ -862,7 +887,8 @@ Sets a timeout for name resolution, for example:
 
 B<NOTE>
 
-This directive is available as part of our
+Since version 1.17.5 and prior to version 1.27.3,
+this directive was available only as part of our
 commercial subscription.
 
 

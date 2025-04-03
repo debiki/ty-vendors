@@ -113,7 +113,7 @@ actually does any work.
 
 =item *
 
-The UDP proxy functionality is not supported.
+The UDP (and, inherently, QUIC) functionality is not supported.
 
 
 

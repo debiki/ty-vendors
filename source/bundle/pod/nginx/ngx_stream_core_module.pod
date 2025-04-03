@@ -79,13 +79,17 @@ configuration parameter.
 
 B<syntax:> listen I<
     I<C<address>>:I<C<port>>
+    [C<default_server>]
     [C<ssl>]
     [C<udp>]
     [C<proxy_protocol>]
+    [C<setfib>=I<C<number>>]
     [C<fastopen>=I<C<number>>]
     [C<backlog>=I<C<number>>]
     [C<rcvbuf>=I<C<size>>]
     [C<sndbuf>=I<C<size>>]
+    [C<accept_filter>=I<C<filter>>]
+    [C<deferred>]
     [C<bind>]
     [C<ipv6only>=C<on>E<verbar>C<off>]
     [C<reuseport>]
@@ -143,6 +147,18 @@ first and last port separated by a hyphen:
 
 
 
+The C<default_server> parameter, if present,
+will cause the server to become the default server for the specified
+I<C<address>>:I<C<port>> pair (1.25.5).
+If none of the directives have the C<default_server>
+parameter then the first server with the
+I<C<address>>:I<C<port>> pair will be
+the default server for this pair.
+
+
+
+
+
 The C<ssl> parameter allows specifying that all
 connections accepted on this port should work in SSL mode.
 
@@ -176,8 +192,24 @@ The PROXY protocol version 2 is supported since version 1.13.11.
 
 The C<listen> directive
 can have several additional parameters specific to socket-related system calls.
+These parameters can be specified in any
+C<listen> directive, but only once for a given
+I<C<address>>:I<C<port>> pair.
 
 =over
+
+
+
+=item 
+C<setfib>=I<C<number>>
+
+
+
+
+
+this parameter (1.25.5) sets the associated routing table, FIB
+(the C<SO_SETFIB> option) for the listening socket.
+This currently works only on FreeBSD.
 
 
 
@@ -245,6 +277,37 @@ sets the send buffer size
 
 
 =item 
+C<accept_filter>=I<C<filter>>
+
+
+
+
+
+sets the name of accept filter
+(the C<SO_ACCEPTFILTER> option) for the listening socket
+that filters incoming connections before passing them to
+C<accept> (1.25.5).
+This works only on FreeBSD and NetBSD 5.0+.
+Possible values are
+L<dataready|http://man.freebsd.org/accf_data>
+and
+L<httpready|http://man.freebsd.org/accf_http>.
+
+
+
+=item 
+C<deferred>
+
+
+
+
+
+instructs to use a deferred C<accept>
+(the C<TCP_DEFER_ACCEPT> socket option) on Linux (1.25.5).
+
+
+
+=item 
 C<bind>
 
 
@@ -260,9 +323,12 @@ for the given port (C<*:>I<C<port>>), nginx will
 C<bind> only to C<*:>I<C<port>>.
 It should be noted that the C<getsockname> system call will be
 made in this case to determine the address that accepted the connection.
-If the C<backlog>,
-C<rcvbuf>, C<sndbuf>,
-C<ipv6only>, C<reuseport>,
+If the C<setfib>,
+C<fastopen>,
+C<backlog>, C<rcvbuf>,
+C<sndbuf>, C<accept_filter>,
+C<deferred>, C<ipv6only>,
+C<reuseport>,
 or C<so_keepalive> parameters
 are used then for a given
 I<C<address>>:I<C<port>> pair
@@ -353,8 +419,12 @@ and set the probes count (C<TCP_KEEPCNT>) to 10 probes.
 
 
 
-Different servers must listen on different
+
+B<NOTE>
+
+Before version 1.25.5, different servers must listen on different
 I<C<address>>:I<C<port>> pairs.
+
 
 
 
@@ -604,7 +674,240 @@ B<context:> I<stream>
 
 
 
-Sets the configuration for a server.
+Sets the configuration for a virtual server.
+There is no clear separation between IP-based (based on the IP address)
+and name-based (based on the
+L<TLS
+Server Name Indication extension|http://en.wikipedia.org/wiki/Server_Name_Indication> (SNI, RFC 6066)) (1.25.5)
+virtual servers.
+Instead, the L</listen> directives describe all
+addresses and ports that should accept connections for the server, and the
+L</server_name> directive lists all server names.
+
+
+
+
+
+
+
+=head2 server_name
+
+
+B<syntax:> server_name I<I<C<name>> ...>
+
+
+B<default:> I<"">
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.25.5.
+
+
+
+
+
+Sets names of a virtual server, for example:
+
+    
+    server {
+        server_name example.com www.example.com;
+    }
+
+
+
+
+
+
+
+The first name becomes the primary server name.
+
+
+
+
+
+Server names can include an asterisk (“C<*>”)
+replacing the first or last part of a name:
+
+    
+    server {
+        server_name example.com *.example.com www.example.*;
+    }
+
+
+Such names are called wildcard names.
+
+
+
+
+
+The first two of the names mentioned above can be combined in one:
+
+    
+    server {
+        server_name .example.com;
+    }
+
+
+
+
+
+
+
+It is also possible to use regular expressions in server names,
+preceding the name with a tilde (“C<~>”):
+
+    
+    server {
+        server_name www.example.com ~^www\d+\.example\.com$;
+    }
+
+
+
+
+
+
+
+Regular expressions can contain captures that can later
+be used in other directives:
+
+    
+    server {
+        server_name ~^(www\.)?(.+)$;
+    
+        proxy_pass www.$2:12345;
+    }
+
+
+
+
+
+
+
+Named captures in regular expressions create variables
+that can later be used in other directives:
+
+    
+    server {
+        server_name ~^(www\.)?(?<domain>.+)$;
+    
+        proxy_pass www.$domain:12345;
+    }
+
+
+
+
+
+
+
+If the directive’s parameter is set to “C<$hostname>”, the
+machine’s hostname is inserted.
+
+
+
+
+
+During searching for a virtual server by name,
+if the name matches more than one of the specified variants,
+(e.g. both a wildcard name and regular expression match), the first matching
+variant will be chosen, in the following order of priority:
+
+=over
+
+
+
+
+=item 1.
+
+the exact name
+
+
+
+=item 2.
+
+the longest wildcard name starting with an asterisk,
+e.g. “C<*.example.com>”
+
+
+
+=item 3.
+
+the longest wildcard name ending with an asterisk,
+e.g. “C<mail.*>”
+
+
+
+=item 4.
+
+the first matching regular expression
+(in order of appearance in the configuration file)
+
+
+
+=back
+
+
+
+
+
+
+
+
+
+=head2 server_names_hash_bucket_size
+
+
+B<syntax:> server_names_hash_bucket_size I<I<C<size>>>
+
+
+B<default:> I<32E<verbar>64E<verbar>128>
+
+
+B<context:> I<stream>
+
+
+
+This directive appeared in version 1.25.5.
+
+
+
+
+
+Sets the bucket size for the server names hash tables.
+The default value depends on the size of the processor’s cache line.
+The details of setting up hash tables are provided in a separate
+L<document|hash>.
+
+
+
+
+
+
+
+=head2 server_names_hash_max_size
+
+
+B<syntax:> server_names_hash_max_size I<I<C<size>>>
+
+
+B<default:> I<512>
+
+
+B<context:> I<stream>
+
+
+
+This directive appeared in version 1.25.5.
+
+
+
+
+
+Sets the maximum I<C<size>> of the server names hash tables.
+The details of setting up hash tables are provided in a separate
+L<document|hash>.
 
 
 

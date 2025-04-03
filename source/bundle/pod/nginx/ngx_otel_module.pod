@@ -22,15 +22,22 @@ context propagation and OTLPE<sol>gRPC export protocol.
 
 
 
+The source code of the module is available
+L<here|https://github.com/nginxinc/nginx-otel>.
+Download and install instructions are available
+L<here|https://github.com/nginxinc/nginx-otel/blob/main/README.md>.
 
-B<NOTE>
 
-This module is available as part of our
-commercial subscription
-in C<nginx-plus-module-otel> package.
-After installation, the module can be loaded
-L<dynamically|ngx_core_module>.
 
+
+
+The module is also available in a prebuilt
+C<nginx-module-otel>
+L<package|linux_packages>
+since 1.25.3
+and in C<nginx-plus-module-otel> package
+as part of our
+commercial subscription.
 
 
 

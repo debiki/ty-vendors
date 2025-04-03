@@ -1467,6 +1467,7 @@ the overall rate will be twice as much as the specified limit.
 The limitation works only if
 buffering of responses from the SCGI
 server is enabled.
+Parameter value can contain variables (1.27.0).
 
 
 

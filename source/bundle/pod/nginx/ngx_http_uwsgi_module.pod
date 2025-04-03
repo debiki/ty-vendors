@@ -1467,6 +1467,7 @@ the overall rate will be twice as much as the specified limit.
 The limitation works only if
 buffering of responses from the uwsgi
 server is enabled.
+Parameter value can contain variables (1.27.0).
 
 
 
@@ -2280,6 +2281,127 @@ Since version 1.21.0, variables can be used in the I<C<file>> name.
 
 
 
+=head2 uwsgi_ssl_certificate_cache
+
+
+B<syntax:> uwsgi_ssl_certificate_cache I<C<off>>
+
+
+B<syntax:> uwsgi_ssl_certificate_cache I<
+    C<max>=I<C<N>>
+    [C<inactive>=I<C<time>>]
+    [C<valid>=I<C<time>>]>
+
+
+B<default:> I<off>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.27.4.
+
+
+
+
+
+Defines a cache that stores
+SSL certificates and
+secret keys
+specified with variables.
+
+
+
+
+
+The directive has the following parameters:
+
+=over
+
+
+
+=item 
+C<max>
+
+
+
+
+
+sets the maximum number of elements in the cache;
+on cache overflow the least recently used (LRU) elements are removed;
+
+
+
+=item 
+C<inactive>
+
+
+
+
+
+defines a time after which an element is removed from the cache
+if it has not been accessed during this time;
+by default, it is 10 seconds;
+
+
+
+=item 
+C<valid>
+
+
+
+
+
+defines a time during which
+an element in the cache is considered valid
+and can be reused;
+by default, it is 60 seconds.
+Certificates that exceed this time will be reloaded or revalidated;
+
+
+
+=item 
+C<off>
+
+
+
+
+
+disables the cache.
+
+
+
+
+=back
+
+
+
+
+
+
+
+Example:
+
+    
+    uwsgi_ssl_certificate       $uwsgi_ssl_server_name.crt;
+    uwsgi_ssl_certificate_key   $uwsgi_ssl_server_name.key;
+    uwsgi_ssl_certificate_cache max=1000 inactive=20s valid=1m;
+
+
+
+
+
+
+
+
+
 =head2 uwsgi_ssl_certificate_key
 
 
@@ -2462,6 +2584,52 @@ the certificate of the secured uwsgi server.
 
 
 
+=head2 uwsgi_ssl_key_log
+
+
+B<syntax:> uwsgi_ssl_key_log I<path>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.27.2.
+
+
+
+
+
+Enables logging of secured uwsgi server connection SSL keys
+and specifies the path to the key log file.
+Keys are logged in the
+L<SSLKEYLOGFILE|https://datatracker.ietf.org/doc/html/draft-ietf-tls-keylogfile>
+format compatible with Wireshark.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 uwsgi_ssl_name
 
 
@@ -2551,7 +2719,7 @@ B<syntax:> uwsgi_ssl_protocols I<
     [C<TLSv1.3>]>
 
 
-B<default:> I<TLSv1 TLSv1.1 TLSv1.2 TLSv1.3>
+B<default:> I<TLSv1.2 TLSv1.3>
 
 
 B<context:> I<http>
@@ -2653,7 +2821,7 @@ This directive appeared in version 1.5.8.
 Determines whether SSL sessions can be reused when working with
 a secured uwsgi server.
 If the errors
-“C<SSL3_GET_FINISHED:digest check failed>”
+“C<digest check failed>”
 appear in the logs, try disabling session reuse.
 
 

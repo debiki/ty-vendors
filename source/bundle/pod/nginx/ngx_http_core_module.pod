@@ -1455,6 +1455,41 @@ keep-alive connections with them were disabled by default.
 
 
 
+=head2 keepalive_min_timeout
+
+
+B<syntax:> keepalive_min_timeout I<I<C<timeout>>>
+
+
+B<default:> I<0>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.27.4.
+
+
+
+
+
+Sets a timeout during which a keep-alive
+client connection will not be closed on the server side
+for connection reuse or on graceful shutdown of worker processes.
+
+
+
+
+
+
+
 =head2 keepalive_requests
 
 
