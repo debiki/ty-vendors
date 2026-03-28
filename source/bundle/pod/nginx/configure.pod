@@ -369,15 +369,8 @@ C<--with-http_v3_module>
 enables building a module that provides support for
 L<HTTPE<sol>3|ngx_http_v3_module>.
 This module is not built by default.
-An SSL library that provides HTTPE<sol>3 support
-is recommended to build and run this module, such as
-L<BoringSSL|https://boringssl.googlesource.com/boringssl>,
-L<LibreSSL|https://www.libressl.org>, or
-L<QuicTLS|https://github.com/quictls/openssl>.
-Otherwise, if using the OpenSSL library,
-OpenSSL compatibility layer will be used
-that does not support QUIC
-L<early data|ngx_http_ssl_module>.
+The OpenSSL library that provides HTTPE<sol>3 support
+is required to build and run this module.
 
 
 

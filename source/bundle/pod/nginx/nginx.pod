@@ -371,6 +371,12 @@ L<ngx_http_auth_request_module|ngx_http_auth_request_module>
 
 =item *
 
+L<ngx_http_auth_require_module|ngx_http_auth_require_module>
+
+
+
+=item *
+
 L<ngx_http_autoindex_module|ngx_http_autoindex_module>
 
 
@@ -539,6 +545,18 @@ L<ngx_http_mp4_module|ngx_http_mp4_module>
 
 =item *
 
+L<ngx_http_num_map_module|ngx_http_num_map_module>
+
+
+
+=item *
+
+L<ngx_http_oidc_module|ngx_http_oidc_module>
+
+
+
+=item *
+
 L<ngx_http_perl_module|ngx_http_perl_module>
 
 
@@ -636,6 +654,12 @@ L<ngx_http_stub_status_module|ngx_http_stub_status_module>
 =item *
 
 L<ngx_http_sub_module|ngx_http_sub_module>
+
+
+
+=item *
+
+L<ngx_http_tunnel_module|ngx_http_tunnel_module>
 
 
 
@@ -831,6 +855,12 @@ L<ngx_stream_mqtt_filter_module|ngx_stream_mqtt_filter_module>
 
 =item *
 
+L<ngx_stream_num_map_module|ngx_stream_num_map_module>
+
+
+
+=item *
+
 L<ngx_stream_pass_module|ngx_stream_pass_module>
 
 
@@ -938,6 +968,12 @@ L<ngx_mgmt_module|ngx_mgmt_module>
 
 =over
 
+
+
+
+=item *
+
+L<ngx_http_acme_module|ngx_http_acme_module>
 
 
 

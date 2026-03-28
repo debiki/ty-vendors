@@ -733,6 +733,49 @@ Example:
 
 
 
+=head2 stall_threshold
+
+
+B<syntax:> stall_threshold I<I<C<time>>>
+
+
+B<default:> I<1000ms>
+
+
+B<context:> I<events>
+
+
+
+This directive appeared in version 1.29.0.
+
+
+
+
+
+Allows overriding the default time threshold for the event loop iteration
+before a stall is reported.
+By default, a stall is reported
+when an event loop iteration exceeds I<C<1000ms>>.
+If the L</timer_resolution> directive is enabled,
+the time threshold will be ignored.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 thread_pool
 
 

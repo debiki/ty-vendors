@@ -974,6 +974,28 @@ $upstream_addr variable.
 
 
 
+=item C<$upstream_last_addr>
+
+
+
+
+keeps the IP address or the path to the UNIX-domain socket
+of the last selected upstream server (1.29.3).
+
+
+
+
+B<NOTE>
+
+This variable is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
 =item C<$upstream_session_time>
 
 

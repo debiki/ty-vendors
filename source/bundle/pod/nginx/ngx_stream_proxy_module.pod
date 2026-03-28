@@ -112,6 +112,48 @@ to intercept network traffic from the proxied server.
 
 
 
+=head2 proxy_bind_dynamic
+
+
+B<syntax:> proxy_bind_dynamic I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+When enabled, makes the bind operation
+at each connection attempt.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 proxy_buffer_size
 
 
@@ -790,6 +832,17 @@ B<context:> I<stream>
 
 
 B<context:> I<server>
+
+
+
+
+
+The value
+C<store>:I<C<scheme>>:I<C<id>>
+can be specified instead of the I<C<file>> (1.29.0),
+which is used to load a secret key with a specified I<C<id>>
+and OpenSSL provider registered URI I<C<scheme>>, such as
+L<C<pkcs11>|https://datatracker.ietf.org/doc/html/rfc7512>.
 
 
 

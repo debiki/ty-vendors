@@ -404,6 +404,55 @@ commercial subscription.
 
 
 
+=item 
+C<route>=I<C<string>>
+
+
+
+
+
+sets the server route name.
+
+
+
+B<NOTE>
+
+Prior to version 1.29.6,
+this parameter was available only as part of our
+commercial subscription.
+
+
+
+
+
+
+=item 
+C<drain>
+
+
+
+
+
+puts the server into the “draining” mode (1.13.6).
+In this mode, only requests bound to the server
+will be proxied to it.
+
+B<NOTE>
+
+Prior to version 1.13.6,
+the parameter could be changed only with the
+L<API|ngx_http_api_module> module.
+
+
+B<NOTE>
+
+Prior to version 1.29.6,
+the parameter was available only as part of our
+commercial subscription.
+
+
+
+
 
 =back
 
@@ -418,17 +467,6 @@ the following parameters are available as part of our
 commercial subscription:
 
 =over
-
-
-
-=item 
-C<route>=I<C<string>>
-
-
-
-
-
-sets the server route name.
 
 
 
@@ -451,26 +489,6 @@ B<NOTE>
 The parameter cannot be used along with the
 L</hash>, L</ip_hash>, and L</random>
 load balancing methods.
-
-
-
-
-=item 
-C<drain>
-
-
-
-
-
-puts the server into the “draining” mode (1.13.6).
-In this mode, only requests bound to the server
-will be proxied to it.
-
-B<NOTE>
-
-Prior to version 1.13.6,
-the parameter could be changed only with the
-L<API|ngx_http_api_module> module.
 
 
 
@@ -813,8 +831,10 @@ Example configuration of memcached upstream with keepalive connections:
 
 
 For HTTP, the L<ngx_http_proxy_module>
-directive should be set to “C<1.1>”
-and the C<Connection> header field should be cleared:
+directive should be “C<1.1>” (by default since 1.29.7)
+or set to “C<2>”
+and the C<Connection> header field should be cleared.
+This example is for versions prior to 1.29.7:
 
     
     upstream http_backend {
@@ -1029,8 +1049,10 @@ keeping the authentication context.
 In order for NTLM authentication to work,
 it is necessary to enable keepalive connections to upstream servers.
 The L<ngx_http_proxy_module>
-directive should be set to “C<1.1>”
-and the C<Connection> header field should be cleared:
+directive should be “C<1.1>” (by default since 1.29.7)
+or set to “C<2>”
+and the C<Connection> header field should be cleared.
+This example is for versions prior to 1.29.7:
 
     
     upstream http_backend {
@@ -1755,6 +1777,8 @@ right after receiving response headers from the upstream server.
 The C<sync> parameter (1.13.8) enables
 L<synchronization|ngx_stream_zone_sync_module>
 of the shared memory zone.
+The parameter is available as part of our
+commercial subscription.
 
 
 
@@ -1772,42 +1796,9 @@ of the shared memory zone.
 
 B<NOTE>
 
-This directive is available as part of our
+Prior to version 1.29.6,
+this directive was available only as part of our
 commercial subscription.
-
-
-
-
-
-
-
-
-=head2 sticky_cookie_insert
-
-
-B<syntax:> sticky_cookie_insert I<I<C<name>>
-[C<expires=>I<C<time>>]
-[C<domain=>I<C<domain>>]
-[C<path=>I<C<path>>]>
-
-
-
-B<context:> I<upstream>
-
-
-
-
-
-This directive is obsolete since version 1.5.7.
-An equivalent
-L</sticky> directive with a new syntax should be used instead:
-
-B<NOTE>
-
-C<sticky cookie> I<C<name>>
-[C<expires=>I<C<time>>]
-[C<domain=>I<C<domain>>]
-[C<path=>I<C<path>>];
 
 
 
@@ -1940,6 +1931,28 @@ The rules of converting header field names to variable names are the same
 as for the variables that start with the
 “L<$http_|ngx_http_core_module>” prefix.
 Only the header fields from the response of the last server are saved.
+
+
+
+=item C<$upstream_last_addr>
+
+
+
+
+keeps the IP address or the path to the UNIX-domain socket
+of the last selected upstream server (1.29.3).
+
+
+
+
+B<NOTE>
+
+This variable is available as part of our
+commercial subscription.
+
+
+
+
 
 
 

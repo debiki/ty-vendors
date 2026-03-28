@@ -147,6 +147,15 @@ To speed up loading of a geo base, addresses should be put in ascending order.
 
 
 
+=item C<volatile>
+
+
+
+
+indicates that the variable is not cacheable (1.29.3).
+
+
+
 
 =back
 

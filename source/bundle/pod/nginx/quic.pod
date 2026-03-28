@@ -15,19 +15,11 @@ Support for
 L<QUIC|https://datatracker.ietf.org/doc/html/rfc9000>
 and
 L<HTTPE<sol>3|https://datatracker.ietf.org/doc/html/rfc9114>
-protocols is available since 1.25.0.
-Also, since 1.25.0, the QUIC and HTTPE<sol>3 support is available in
+protocols is available since 1.25.0, it is included in
 Linux L<binary packages|linux_packages>.
-
-
-
-
-
-
-B<NOTE>
-
-The QUIC and HTTPE<sol>3 support is experimental, caveat emptor applies.
-
+Please refer to the
+L<ngx_http_v3_module|ngx_http_v3_module>
+documentation.
 
 
 
@@ -43,21 +35,16 @@ Please refer to L<configure> for details.
 
 
 
-When configuring nginx, it is possible to enable QUIC and HTTPE<sol>3 using the
-L<C<--with-http_v3_module>|configure>
-configuration parameter.
-
-
-
-
-
-An SSL library that provides QUIC support is recommended to build nginx, such as
-L<BoringSSL|https://boringssl.googlesource.com/boringssl>,
-L<LibreSSL|https://www.libressl.org>, or
-L<QuicTLS|https://github.com/quictls/openssl>.
+The L<OpenSSL|https://openssl.org> library
+version 3.5.1 or higher is recommended to build nginx with QUIC support.
 Otherwise, the L<OpenSSL|https://openssl.org>
 compatibility layer will be used that does not support
 L<early data|ngx_http_ssl_module>.
+Alternatively,
+L<BoringSSL|https://boringssl.googlesource.com/boringssl>,
+L<LibreSSL|https://www.libressl.org>, or
+L<QuicTLS|https://github.com/quictls/openssl>
+prebuilt libraries can be used.
 
 
 
@@ -71,8 +58,7 @@ L<BoringSSL|https://boringssl.googlesource.com/boringssl>:
         --with-debug
         --with-http_v3_module
         --with-cc-opt="-I../boringssl/include"
-        --with-ld-opt="-L../boringssl/build/ssl
-                       -L../boringssl/build/crypto"
+        --with-ld-opt="-L../boringssl/build -lstdc++"
 
 
 
@@ -96,7 +82,7 @@ L<QuicTLS|https://github.com/quictls/openssl>:
 
 
 
-Alternatively, nginx can be configured with a modern version of
+Alternatively, nginx can be configured with
 L<LibreSSL|https://www.libressl.org>:
 
     
@@ -118,7 +104,7 @@ nginx is compiled and installed using C<make>.
 
 
 
-=head1 Configuration
+=head1 Configuration tips
 
 
 
@@ -136,13 +122,6 @@ Along with the C<quic> parameter
 it is also possible to specify the
 L<reuseport|ngx_http_core_module>
 parameter to make it work properly with multiple workers.
-
-
-
-
-
-For the list of directives, see
-L<ngx_http_v3_module|ngx_http_v3_module>.
 
 
 
@@ -196,40 +175,6 @@ L<GSO Linux-specific optimization|http://vger.kernel.org/lpc_net2018_talks/wille
 is disabled.
 Enable it in case a corresponding network interface is configured
 to support GSO.
-
-
-
-
-=head1 Example Configuration
-
-
-
-
-    
-    http {
-        log_format quic '$remote_addr - $remote_user [$time_local] '
-                        '"$request" $status $body_bytes_sent '
-                        '"$http_referer" "$http_user_agent" "$http3"';
-    
-        access_log logs/access.log quic;
-    
-        server {
-            # for better compatibility it's recommended
-            # to use the same port for quic and https
-            listen 8443 quic reuseport;
-            listen 8443 ssl;
-    
-            ssl_certificate     certs/example.com.crt;
-            ssl_certificate_key certs/example.com.key;
-    
-            location / {
-                # required for browsers to direct them to quic port
-                add_header Alt-Svc 'h3=":8443"; ma=86400';
-            }
-        }
-    }
-
-
 
 
 

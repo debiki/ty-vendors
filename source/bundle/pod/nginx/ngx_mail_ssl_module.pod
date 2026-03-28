@@ -205,6 +205,51 @@ L<error log|ngx_core_module>.
 
 
 
+=head2 ssl_certificate_compression
+
+
+B<syntax:> ssl_certificate_compression I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<mail>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.29.1.
+
+
+
+
+
+Enables TLS 1.3
+L<compression|https://datatracker.ietf.org/doc/html/rfc8879>
+of server certificates.
+
+B<NOTE>
+
+The directive is supported when using OpenSSL 3.2 or higher;
+the list of supported compression algorithms is provided by the library.
+
+
+B<NOTE>
+
+The directive is supported when using BoringSSL;
+the list of supported compression algorithms includes
+C<zlib> (1.29.3).
+
+
+
+
+
+
+
+
 =head2 ssl_certificate_key
 
 
@@ -233,6 +278,17 @@ C<engine>:I<C<name>>:I<C<id>>
 can be specified instead of the I<C<file>> (1.7.9),
 which loads a secret key with a specified I<C<id>>
 from the OpenSSL engine I<C<name>>.
+
+
+
+
+
+The value
+C<store>:I<C<scheme>>:I<C<id>>
+can be specified instead of the I<C<file>> (1.29.0),
+which is used to load a secret key with a specified I<C<id>>
+and OpenSSL provider registered URI I<C<scheme>>, such as
+L<C<pkcs11>|https://datatracker.ietf.org/doc/html/rfc7512>.
 
 
 

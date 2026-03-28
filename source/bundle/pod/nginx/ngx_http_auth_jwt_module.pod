@@ -91,6 +91,12 @@ EdDSA (Ed25519 and Ed448 signatures) (1.15.7)
 
 
 
+=item *
+
+PS256, PS384, PS512 (1.29.0)
+
+
+
 =back
 
 

@@ -20,21 +20,26 @@ L<HTTPE<sol>3|https://datatracker.ietf.org/doc/html/rfc9114>.
 
 
 This module is not built by default, it should be enabled with the
-L<C<--with-http_v3_module>|configure>
+C<--with-http_v3_module>
 configuration parameter.
 
 B<NOTE>
 
-An SSL library that provides QUIC support
-such as
+This module requires the
+L<OpenSSL|http://www.openssl.org> library
+version 1.1.1 or higher.
+
+
+B<NOTE>
+
+0-RTT support requires the
+L<OpenSSL|http://www.openssl.org> library
+version 3.5.1 or higher.
+Alternatively,
 L<BoringSSL|https://boringssl.googlesource.com/boringssl>,
 L<LibreSSL|https://www.libressl.org>, or
 L<QuicTLS|https://github.com/quictls/openssl>
-is recommended to build and run this module.
-Otherwise,
-when using the L<OpenSSL|https://openssl.org> library,
-OpenSSL compatibility layer will be used that does not support
-L<early data|ngx_http_ssl_module>.
+libraries can be used to build and run this module.
 
 
 
@@ -45,6 +50,22 @@ L<early data|ngx_http_ssl_module>.
 
 
 The module is experimental, caveat emptor applies.
+
+
+
+
+
+Before version 1.29.1,
+0-RTT support could not be enabled with OpenSSL
+regardless of the
+L<ngx_http_ssl_module>
+directive value.
+
+
+
+
+
+The module cannot be built on the Win32 platform.
 
 
 
@@ -79,9 +100,6 @@ The module is experimental, caveat emptor applies.
     }
 
 
-Note that accepting HTTPE<sol>3 connections over TLS requires
-the TLSv1.3 protocol support, which is available since
-L<OpenSSL|http://www.openssl.org> version 1.1.1.
 
 
 

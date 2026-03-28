@@ -42,6 +42,73 @@ L<ngx_http_v2_module|ngx_http_v2_module> module.
 
 =head1 Directives
 
+=head2 grpc_allow_upstream
+
+
+B<syntax:> grpc_allow_upstream I<I<C<address>>>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+Defines conditions under which access to a gRPC server
+is allowed or denied.
+If all string parameters are not empty
+and not equal to “0” then the access is allowed.
+The conditions are evaluated each time
+before a connection to a gRPC server is established.
+Parameter values can contain variables:
+
+    
+    geo $upstream_last_addr $allow {
+        volatile;
+        10.10.0.0/24        1;
+    }
+    
+    server {
+        listen 127.0.0.1:8080;
+        http2 on;
+    
+        location / {
+            grpc_pass           localhost:9000;
+            grpc_allow_upstream $allow;
+            ...
+        }
+    }
+
+
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 grpc_bind
 
 
@@ -100,6 +167,51 @@ to intercept network traffic from the gRPC server.
 
 
 
+=head2 grpc_bind_dynamic
+
+
+B<syntax:> grpc_bind_dynamic I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+When enabled, makes the bind operation
+at each connection attempt.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 grpc_buffer_size
 
 
@@ -123,7 +235,13 @@ B<context:> I<location>
 
 Sets the I<C<size>> of the buffer used for reading the response
 received from the gRPC server.
+The first part of the response usually contains a small header;
+if it exceeds the buffer size, the response is considered
+invalid.
 The response is passed to the client synchronously, as soon as it is received.
+By default, the buffer size is equal to one memory page.
+This is either 4K or 8K, depending on a platform.
+It can be made smaller, however.
 
 
 
@@ -295,6 +413,7 @@ with the L<ngx_http_core_module> directive.
 B<syntax:> grpc_next_upstream I<
     C<error> E<verbar>
     C<timeout> E<verbar>
+    C<denied> E<verbar>
     C<invalid_header> E<verbar>
     C<http_500> E<verbar>
     C<http_502> E<verbar>
@@ -343,6 +462,25 @@ server, passing a request to it, or reading the response header;
 
 a timeout has occurred while establishing a connection with the
 server, passing a request to it, or reading the response header;
+
+
+=item C<denied>
+
+
+
+the server denied
+the connection (1.29.3);
+
+
+
+B<NOTE>
+
+This parameter is available as part of our
+commercial subscription.
+
+
+
+
 
 
 =item C<invalid_header>
@@ -443,7 +581,8 @@ transferring of a response, fixing this is impossible.
 The directive also defines what is considered an
 L<unsuccessful
 attempt|ngx_http_upstream_module> of communication with a server.
-The cases of C<error>, C<timeout> and
+The cases of C<error>, C<timeout>,
+C<denied> and
 C<invalid_header> are always considered unsuccessful attempts,
 even if they are not specified in the directive.
 The cases of C<http_500>, C<http_502>,
@@ -652,6 +791,62 @@ The timeout is set only between two successive read operations,
 not for the transmission of the whole response.
 If the gRPC server does not transmit anything within this time,
 the connection is closed.
+
+
+
+
+
+
+
+=head2 grpc_request_dynamic
+
+
+B<syntax:> grpc_request_dynamic I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+Enables or disables creation of a separate request instance
+for each gRPC server.
+By default, a single request is used for all gRPC servers.
+If enabled, a separate request instance is created,
+allowing per-server request customization.
+For example, the server-specific C<Host> request header field
+can be set:
+
+    
+    grpc_request_dynamic on;
+    grpc_set_header      Host $upstream_last_server_name;
+
+
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
 
 
 
@@ -961,6 +1156,17 @@ C<engine>:I<C<name>>:I<C<id>>
 can be specified instead of the I<C<file>>,
 which loads a secret key with a specified I<C<id>>
 from the OpenSSL engine I<C<name>>.
+
+
+
+
+
+The value
+C<store>:I<C<scheme>>:I<C<id>>
+can be specified instead of the I<C<file>> (1.29.0),
+which is used to load a secret key with a specified I<C<id>>
+and OpenSSL provider registered URI I<C<scheme>>, such as
+L<C<pkcs11>|https://datatracker.ietf.org/doc/html/rfc7512>.
 
 
 

@@ -77,6 +77,8 @@ There could be several C<add_header> directives.
 These directives are inherited from the previous configuration level
 if and only if there are no C<add_header> directives
 defined on the current level.
+Inheritance rules can be redefined with the
+L</add_header_inherit> directive (1.29.3).
 
 
 
@@ -84,6 +86,71 @@ defined on the current level.
 
 If the C<always> parameter is specified (1.7.5),
 the header field will be added regardless of the response code.
+
+
+
+
+
+
+
+=head2 add_header_inherit
+
+
+B<syntax:> add_header_inherit I<
+    C<on> E<verbar>
+    C<off> E<verbar>
+    C<merge>>
+
+
+B<default:> I<on>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+B<context:> I<if in location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+Allows altering inheritance rules for the values specified in the
+L</add_header> directives.
+By default, the
+standard inheritance model is used.
+
+
+
+
+
+The C<merge> parameter enables appending values
+from the previous level to the values defined at the current level.
+
+
+
+
+
+The C<off> parameter cancels inheritance of the values
+from the previous configuration level.
+
+
+
+
+
+The inheritance rules themselves are inherited in a standard way.
+For example, C<add_header_inherit merge;>
+specified at the top level will
+be inherited in all nested levels recursively unless redefined later.
 
 
 
@@ -131,6 +198,8 @@ There could be several C<add_trailer> directives.
 These directives are inherited from the previous configuration level
 if and only if there are no C<add_trailer> directives
 defined on the current level.
+Inheritance rules can be redefined with the
+L</add_trailer_inherit> directive (1.29.3).
 
 
 
@@ -138,6 +207,71 @@ defined on the current level.
 
 If the C<always> parameter is specified
 the specified field will be added regardless of the response code.
+
+
+
+
+
+
+
+=head2 add_trailer_inherit
+
+
+B<syntax:> add_trailer_inherit I<
+    C<on> E<verbar>
+    C<off> E<verbar>
+    C<merge>>
+
+
+B<default:> I<on>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+B<context:> I<if in location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+Allows altering inheritance rules for the values specified in the
+L</add_trailer> directives.
+By default, the
+standard inheritance model is used.
+
+
+
+
+
+The C<merge> parameter enables appending values
+from the previous level to the values defined at the current level.
+
+
+
+
+
+The C<off> parameter cancels inheritance of the values
+from the previous configuration level.
+
+
+
+
+
+The inheritance rules themselves are inherited in a standard way.
+For example, C<add_trailer_inherit merge;>
+specified at the top level will
+be inherited in all nested levels recursively unless redefined later.
 
 
 

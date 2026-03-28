@@ -459,6 +459,8 @@ This directive appeared in version 1.13.9.
 B<NOTE>
 
 This directive is obsolete since version 1.25.1.
+The L<ngx_http_core_module>
+directive can be used instead.
 
 
 

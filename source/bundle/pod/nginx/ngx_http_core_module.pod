@@ -996,6 +996,56 @@ modules currently ignore this directive.
 
 
 
+=head2 early_hints
+
+
+B<syntax:> early_hints I<I<C<string>> ...>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.0.
+
+
+
+
+
+Defines conditions under which
+the C<103> (C<Early Hints>) response
+will be passed to a client.
+If at least one value of the string parameters is not empty and is not
+equal to “0” then the response will be passed:
+
+    
+    map $http_sec_fetch_mode $early_hints {
+        navigate $http2$http3;
+    }
+    
+    server {
+        ...
+        location / {
+            early_hints $early_hints;
+            proxy_pass http://example.com;
+        }
+    }
+
+
+
+
+
+
+
+
+
 =head2 error_page
 
 
@@ -2023,6 +2073,7 @@ B<syntax:> listen I<
     [C<http2> E<verbar>
      C<quic>]
     [C<proxy_protocol>]
+    [C<multipath>]
     [C<setfib>=I<C<number>>]
     [C<fastopen>=I<C<number>>]
     [C<backlog>=I<C<number>>]
@@ -2043,6 +2094,7 @@ B<syntax:> listen I<
     [C<http2> E<verbar>
      C<quic>]
     [C<proxy_protocol>]
+    [C<multipath>]
     [C<setfib>=I<C<number>>]
     [C<fastopen>=I<C<number>>]
     [C<backlog>=I<C<number>>]
@@ -2063,6 +2115,7 @@ B<syntax:> listen I<
     [C<http2> E<verbar>
      C<quic>]
     [C<proxy_protocol>]
+    [C<multipath>]
     [C<backlog>=I<C<number>>]
     [C<rcvbuf>=I<C<size>>]
     [C<sndbuf>=I<C<size>>]
@@ -2188,6 +2241,23 @@ protocol|http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt>.
 B<NOTE>
 
 The PROXY protocol version 2 is supported since version 1.13.11.
+
+
+
+
+
+
+The C<multipath> parameter configures a listening socket
+for working with
+L<Multipath TCP|https://datatracker.ietf.org/doc/html/rfc8684>
+protocol (1.29.7).
+
+B<NOTE>
+
+Adding or removing this parameter will also enable
+the C<SO_REUSEPORT> socket option, which may have
+the same security implications as when using
+the reuseport parameter.
 
 
 
@@ -2412,8 +2482,9 @@ C<SO_KEEPALIVE> option is turned off for the socket.
 Some operating systems support setting of TCP keepalive parameters on
 a per-socket basis using the C<TCP_KEEPIDLE>,
 C<TCP_KEEPINTVL>, and C<TCP_KEEPCNT> socket options.
-On such systems (currently, Linux 2.4+, NetBSD 5+, and
-FreeBSD 9.0-STABLE), they can be configured
+On such systems
+(currently, Linux, NetBSD, Dragonfly, FreeBSD, and macOS),
+they can be configured
 using the I<C<keepidle>>, I<C<keepintvl>>, and
 I<C<keepcnt>> parameters.
 One or two parameters may be omitted, in which case the system default setting
@@ -3560,8 +3631,11 @@ Allows access if all (C<all>) or at least one
 L<ngx_http_access_module|ngx_http_access_module>,
 L<ngx_http_auth_basic_module|ngx_http_auth_basic_module>,
 L<ngx_http_auth_request_module|ngx_http_auth_request_module>,
-or
 L<ngx_http_auth_jwt_module|ngx_http_auth_jwt_module>
+(1.13.10),
+or
+L<ngx_http_auth_oidc_module|ngx_http_auth_jwt_module>
+(1.27.4)
 modules allow access.
 
 
@@ -4880,6 +4954,17 @@ or an empty string otherwise
 
 
 
+=item C<$is_request_port>
+
+
+
+
+“C<:>” if
+$request_port is non-empty,
+or an empty string otherwise (1.29.3)
+
+
+
 =item C<$limit_rate>
 
 
@@ -5303,6 +5388,19 @@ request length (including request line, header, and request body)
 
 request method, usually
 “C<GET>” or “C<POST>”
+
+
+
+=item C<$request_port>
+
+
+
+
+in this order of precedence:
+port number from the
+L<URI|https://datatracker.ietf.org/doc/html/rfc9110#section-4.2.1>
+authority component, or
+port number from the C<Host> request header field (1.29.3)
 
 
 

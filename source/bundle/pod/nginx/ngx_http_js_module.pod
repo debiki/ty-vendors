@@ -154,7 +154,7 @@ The F<http.js> file:
 =head2 js_body_filter
 
 
-B<syntax:> js_body_filter I<I<C<function>> E<verbar> I<C<module.function>>
+B<syntax:> js_body_filter I<I<C<module.function>>
 [I<C<buffer_type>>=I<C<string>> E<verbar> I<C<buffer>>]>
 
 
@@ -255,20 +255,50 @@ For example, to transform all the lowercase letters in the response body:
     }
 
 
-To stop filtering (following data chunks will be passed to client
-without calling C<js_body_filter>),
+
+
+
+
+
+If the filter function changes the length of the response body, the
+C<Content-Length> response header (if present) should be cleared
+in C<js_header_filter>
+to enforce chunked transfer encoding:
+
+    
+    example.conf:
+     location /foo {
+         # proxy_pass http://localhost:8080;
+    
+        js_header_filter main.clear_content_length;
+        js_body_filter   main.filter;
+     }
+    
+    example.js:
+     function clear_content_length(r) {
+         delete r.headersOut['Content-Length'];
+     }
+
+
+
+
+
+
+
+To stop filtering and pass the data chunks to the client
+without calling C<js_body_filter>,
 L<C<r.done()>|reference>
 can be used.
+For example, to prepend some data to the response body:
+
+    
+    function prepend(r, data, flags) {
+        r.sendBuffer("XXX");
+        r.sendBuffer(data, flags);
+        r.done();
+    }
 
 
-
-
-
-If the filter function changes the length of the response body, then
-it is required to clear out the C<Content-Length> response header
-(if any) in
-C<js_header_filter>
-to enforce chunked transfer encoding.
 
 
 
@@ -308,7 +338,7 @@ since L<0.7.7|changes>.
 =head2 js_content
 
 
-B<syntax:> js_content I<I<C<function>> E<verbar> I<C<module.function>>>
+B<syntax:> js_content I<I<C<module.function>>>
 
 
 
@@ -708,10 +738,237 @@ with L<Fetch API|reference>.
 
 
 
+=head2 js_fetch_proxy
+
+
+B<syntax:> js_fetch_proxy I<I<C<url>>>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 0.9.4.
+
+
+
+
+
+Configures a forward proxy URL
+with L<Fetch API|reference>.
+The I<C<url>> supports the HTTP scheme only
+and can contain optional user credentials
+in the format C<http:E<sol>E<sol>[user:password@]host:port>
+for Basic authentication.
+Supports both HTTP and HTTPS connections to destination servers.
+If the I<C<url>> is empty, proxy routing is disabled.
+The parameter value can contain variables.
+
+
+
+
+
+Example:
+
+    
+    location /fetch {
+        js_fetch_proxy http://user:pass@proxy.example.com:3128;
+        js_content main.fetch_handler;
+    }
+
+
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive
+
+
+B<syntax:> js_fetch_keepalive I<I<C<connections>>>
+
+
+B<default:> I<0>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Activates the cache for connections to destination servers.
+When the value is greater than C<0>,
+enables keepalive connections for
+L<Fetch API|reference>.
+
+
+
+
+
+The I<C<connections>> parameter sets the maximum number of idle
+keepalive connections to destination servers that are preserved in the cache
+of each worker process.
+When this number is exceeded, the least recently used connections are closed.
+
+
+
+
+
+Example:
+
+    
+    location /fetch {
+        js_fetch_keepalive 32;
+        js_fetch_trusted_certificate /path/to/ISRG_Root_X1.pem;
+        js_content main.fetch_handler;
+    }
+
+
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive_requests
+
+
+B<syntax:> js_fetch_keepalive_requests I<I<C<number>>>
+
+
+B<default:> I<1000>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Sets the maximum number of requests that can be served through one keepalive
+connection with L<Fetch API|reference>.
+After the maximum number of requests is made, the connection is closed.
+
+
+
+
+
+Closing connections periodically is necessary to free per-connection memory
+allocations.
+Therefore, using too high maximum number of requests could result in
+excessive memory usage and not recommended.
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive_time
+
+
+B<syntax:> js_fetch_keepalive_time I<I<C<time>>>
+
+
+B<default:> I<1h>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Limits the maximum time during which requests can be processed through one
+keepalive connection with L<Fetch API|reference>.
+After this time is reached, the connection is closed following the subsequent
+request processing.
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive_timeout
+
+
+B<syntax:> js_fetch_keepalive_timeout I<I<C<time>>>
+
+
+B<default:> I<60s>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Sets a timeout during which an idle keepalive connection to a destination server
+will stay open with L<Fetch API|reference>.
+
+
+
+
+
+
+
 =head2 js_header_filter
 
 
-B<syntax:> js_header_filter I<I<C<function>> E<verbar> I<C<module.function>>>
+B<syntax:> js_header_filter I<I<C<module.function>>>
 
 
 
@@ -877,6 +1134,88 @@ The L</js_import> directive should be used instead.
 
 
 
+=head2 js_load_http_native_module
+
+
+B<syntax:> js_load_http_native_module I<I<C<path>> [C<as> I<C<name>>]>
+
+
+
+B<context:> I<main>
+
+
+
+This directive appeared in version 0.9.5.
+
+
+
+
+
+Loads a L<native module|native_modules>
+(shared library) for use in HTTP JavaScript code.
+The directive is
+L<QuickJS|engine>-only
+and is not available when using the njs built-in JavaScript engine.
+
+
+
+
+
+The I<C<path>> parameter
+specifies the absolute path to the shared library file.
+The optional C<as> I<C<name>> parameter
+provides an alias name for importing the module in JavaScript code.
+If not specified, the module can be imported using its filename.
+
+
+
+
+
+Example:
+
+    
+    js_load_http_native_module /path/to/mylib.so;
+    js_load_http_native_module /path/to/other.so as myalias;
+    
+    http {
+        js_import main.js;
+        # ... rest of http configuration
+    }
+
+
+In JavaScript code:
+
+    
+    // Import by filename
+    import * as mylib from 'mylib.so';
+    
+    // Import by alias
+    import * as myalias from 'myalias';
+    
+    // Use exported functions
+    let result = mylib.add(5, 10);
+
+
+
+
+
+
+
+
+B<NOTE>
+
+For security reasons, this directive is only allowed
+in the C<main> configuration context.
+Native modules run with full process privileges;
+use absolute paths and ensure proper code review.
+
+
+
+
+
+
+
+
 =head2 js_path
 
 
@@ -924,8 +1263,7 @@ since L<0.7.7|changes>.
 =head2 js_periodic
 
 
-B<syntax:> js_periodic I<I<C<function>> E<verbar>
-        I<C<module.function>>
+B<syntax:> js_periodic I<I<C<module.function>>
         [C<interval>=I<C<time>>]
         [C<jitter>=I<C<number>>]
         [C<worker_affinity>=I<C<mask>>]>
@@ -1073,7 +1411,7 @@ Several C<js_preload_object> directives can be specified.
 
 B<syntax:> js_set I<
     I<C<$variable>>
-    I<C<function>> E<verbar> I<C<module.function>>
+    I<C<module.function>>
     [C<nocache>]>
 
 
@@ -1167,7 +1505,8 @@ B<syntax:> js_shared_dict_zone I<
     C<zone>=I<C<name>>:I<C<size>>
     [C<timeout>=I<C<time>>]
     [C<type>=C<string>E<verbar>C<number>]
-    [C<evict>]>
+    [C<evict>]
+    [C<state>=I<C<file>>]>
 
 
 
@@ -1220,6 +1559,15 @@ key-value pair when the zone storage is exhausted.
 
 
 
+The optional C<state> parameter specifies a I<C<file>>
+that keeps the shared dictionary state
+in JSON format and makes it persistent across nginx restarts
+(L<0.9.1|changes>).
+
+
+
+
+
 Example:
 
     
@@ -1234,6 +1582,9 @@ Example:
     
         # Creates a 32Kb permanent dictionary with number values:
         js_shared_dict_zone zone=num:32k type=number;
+    
+        # Creates a 1Mb dictionary with string values and persistent state:
+        js_shared_dict_zone zone=persistent:1M state=/tmp/dict.json;
     
     example.js:
         function get(r) {

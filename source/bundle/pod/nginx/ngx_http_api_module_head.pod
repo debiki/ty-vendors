@@ -259,6 +259,14 @@ redirect|ngx_http_core_module> happens during request processing.
 
 =item *
 
+The “C<uuid>” field was added
+to the E<sol>license data
+in version 9 (1.29.0).
+
+
+
+=item *
+
 The E<sol>license data
 were added in version 9 (1.27.2).
 

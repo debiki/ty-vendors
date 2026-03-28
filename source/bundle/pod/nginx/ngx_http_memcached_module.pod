@@ -45,6 +45,72 @@ external to nginx.
 
 =head1 Directives
 
+=head2 memcached_allow_upstream
+
+
+B<syntax:> memcached_allow_upstream I<I<C<string>> ...>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+Defines conditions under which access to a memcached server
+is allowed or denied.
+If all string parameters are not empty
+and not equal to “0” then the access is allowed.
+The conditions are evaluated each time
+before a connection to a memcached server is established.
+Parameter values can contain variables:
+
+    
+    geo $upstream_last_addr $allow {
+        volatile;
+        10.10.0.0/24        1;
+    }
+    
+    server {
+        listen 127.0.0.1:8080;
+    
+        location / {
+            memcached_pass           host:11211;
+            memcached_allow_upstream $allow;
+            ...
+        }
+    }
+
+
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 memcached_bind
 
 
@@ -100,6 +166,51 @@ the C<transparent> parameter is specified, worker processes
 inherit the C<CAP_NET_RAW> capability from the master process.
 It is also necessary to configure kernel routing table
 to intercept network traffic from the memcached server.
+
+
+
+
+
+
+
+=head2 memcached_bind_dynamic
+
+
+B<syntax:> memcached_bind_dynamic I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+When enabled, makes the bind operation
+at each connection attempt.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
 
 
 
@@ -210,6 +321,7 @@ if the flag is set.
 B<syntax:> memcached_next_upstream I<
     C<error> E<verbar>
     C<timeout> E<verbar>
+    C<denied> E<verbar>
     C<invalid_response> E<verbar>
     C<not_found> E<verbar>
     C<off>
@@ -251,6 +363,25 @@ server, passing a request to it, or reading the response header;
 
 a timeout has occurred while establishing a connection with the
 server, passing a request to it, or reading the response header;
+
+
+=item C<denied>
+
+
+
+the server denied
+the connection (1.29.3);
+
+
+
+B<NOTE>
+
+This parameter is available as part of our
+commercial subscription.
+
+
+
+
 
 
 =item C<invalid_response>
@@ -295,7 +426,8 @@ transferring of a response, fixing this is impossible.
 The directive also defines what is considered an
 L<unsuccessful
 attempt|ngx_http_upstream_module> of communication with a server.
-The cases of C<error>, C<timeout> and
+The cases of C<error>, C<timeout>,
+C<denied> and
 C<invalid_response> are always considered unsuccessful attempts,
 even if they are not specified in the directive.
 The case of C<not_found>

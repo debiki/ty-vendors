@@ -366,6 +366,51 @@ Example:
 
 
 
+=head2 ssl_certificate_compression
+
+
+B<syntax:> ssl_certificate_compression I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.29.1.
+
+
+
+
+
+Enables TLS 1.3
+L<compression|https://datatracker.ietf.org/doc/html/rfc8879>
+of server certificates.
+
+B<NOTE>
+
+The directive is supported when using OpenSSL 3.2 or higher;
+the list of supported compression algorithms is provided by the library.
+
+
+B<NOTE>
+
+The directive is supported when using BoringSSL;
+the list of supported compression algorithms includes
+C<zlib> (1.29.3).
+
+
+
+
+
+
+
+
 =head2 ssl_certificate_key
 
 
@@ -394,6 +439,17 @@ C<engine>:I<C<name>>:I<C<id>>
 can be specified instead of the I<C<file>>,
 which loads a secret key with a specified I<C<id>>
 from the OpenSSL engine I<C<name>>.
+
+
+
+
+
+The value
+C<store>:I<C<scheme>>:I<C<id>>
+can be specified instead of the I<C<file>> (1.29.0),
+which is used to load a secret key with a specified I<C<id>>
+and OpenSSL provider registered URI I<C<scheme>>, such as
+L<C<pkcs11>|https://datatracker.ietf.org/doc/html/rfc7512>.
 
 
 
@@ -687,6 +743,51 @@ When using OpenSSL 1.0.2 or higher,
 this directive sets the list of curves supported by the server.
 Thus, in order for ECDSA certificates to work,
 it is important to include the curves used in the certificates.
+
+
+
+
+
+
+
+
+=head2 ssl_ech_file
+
+
+B<syntax:> ssl_ech_file I<I<C<file>>>
+
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.29.4.
+
+
+
+
+
+Specifies a I<C<file>> with encrypted ClientHello configuration
+(C<ECHConfig>) in the
+L<PEM|https://datatracker.ietf.org/doc/draft-farrell-tls-pemesni/>
+format used to enable TLS 1.3
+L<ECH|https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni>
+in shared mode.
+
+
+
+
+
+
+B<NOTE>
+
+The directive is currently supported only when using OpenSSL
+L<ECH
+feature branch|https://github.com/openssl/openssl/tree/feature/ech>.
 
 
 
@@ -1742,6 +1843,28 @@ for an established SSL connection (1.11.8);
 
 
 
+=item C<$ssl_client_sigalg>
+
+
+
+
+returns the
+L<signature algorithm|https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-16>
+for the client certificate for an established SSL connection (1.29.3).
+
+B<NOTE>
+
+The variable is supported only when using OpenSSL version 3.5 or higher.
+With older versions, the variable value will be an empty string.
+
+
+B<NOTE>
+
+The variable is available only for new sessions.
+
+
+
+
 =item C<$ssl_client_v_end>
 
 
@@ -1831,6 +1954,40 @@ The variable is available only for new sessions.
 
 
 
+=item C<$ssl_ech_outer_server_name>
+
+
+
+
+returns the public server name requested through
+L<SNI|http://en.wikipedia.org/wiki/Server_Name_Indication>
+if TLS 1.3 ECH was accepted,
+otherwise “” (1.29.4);
+
+
+
+=item C<$ssl_ech_status>
+
+
+
+
+returns the result of TLS 1.3 ECH processing:
+“C<FAILED>”,
+“C<BACKEND>”,
+“C<GREASE>”,
+“C<SUCCESS>”, or
+“C<NOT_TRIED>” (1.29.4);
+
+B<NOTE>
+
+The variable is currently supported only when using OpenSSL
+L<ECH feature branch|https://github.com/openssl/openssl/tree/feature/ech>
+and is therefore subject to change.
+The variable value will otherwise be an empty string.
+
+
+
+
 =item C<$ssl_protocol>
 
 
@@ -1866,6 +2023,28 @@ returns the session identifier of an established SSL connection;
 
 returns “C<r>” if an SSL session was reused,
 or “C<.>” otherwise.
+
+
+
+=item C<$ssl_sigalg>
+
+
+
+
+returns the
+L<signature algorithm|https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-16>
+for the server certificate for an established SSL connection (1.29.3).
+
+B<NOTE>
+
+The variable is supported only when using OpenSSL version 3.5 or higher.
+With older versions, the variable value will be an empty string.
+
+
+B<NOTE>
+
+The variable is available only for new sessions.
+
 
 
 

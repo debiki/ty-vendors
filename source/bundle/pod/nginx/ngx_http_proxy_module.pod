@@ -36,6 +36,72 @@ requests to another server.
 
 =head1 Directives
 
+=head2 proxy_allow_upstream
+
+
+B<syntax:> proxy_allow_upstream I<I<C<string>> ...>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+Defines conditions under which access to a proxied server
+is allowed or denied.
+If all string parameters are not empty
+and not equal to “0” then the access is allowed.
+The conditions are evaluated each time
+before a connection to a proxied server is established.
+Parameter values can contain variables:
+
+    
+    geo $upstream_last_addr $allow {
+        volatile;
+        10.10.0.0/24        1;
+    }
+    
+    server {
+        listen 127.0.0.1:8080;
+    
+        location / {
+            proxy_pass           localhost:8000;
+            proxy_allow_upstream $allow;
+            ...
+        }
+    }
+
+
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 proxy_bind
 
 
@@ -98,6 +164,51 @@ to intercept network traffic from the proxied server.
 
 
 
+=head2 proxy_bind_dynamic
+
+
+B<syntax:> proxy_bind_dynamic I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+When enabled, makes the bind operation
+at each connection attempt.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
+
 =head2 proxy_buffer_size
 
 
@@ -121,7 +232,9 @@ B<context:> I<location>
 
 Sets the I<C<size>> of the buffer used for reading the first part
 of the response received from the proxied server.
-This part usually contains a small response header.
+This part usually contains a small response header;
+if it exceeds the buffer size, the response is considered
+invalid.
 By default, the buffer size is equal to one memory page.
 This is either 4K or 8K, depending on a platform.
 It can be made smaller, however.
@@ -1702,10 +1815,12 @@ the L</proxy_pass_header> directive can be used.
 =head2 proxy_http_version
 
 
-B<syntax:> proxy_http_version I<C<1.0> E<verbar> C<1.1>>
+B<syntax:> proxy_http_version I<
+    C<1.0> E<verbar> C<1.1> E<verbar>
+    C<2>>
 
 
-B<default:> I<1.0>
+B<default:> I<1.1>
 
 
 B<context:> I<http>
@@ -1725,11 +1840,18 @@ This directive appeared in version 1.1.4.
 
 
 Sets the HTTP protocol version for proxying.
-By default, version 1.0 is used.
-Version 1.1 is recommended for use with
+Since 1.29.7, version 1.1 is used by default.
+Before 1.29.7, version 1.0 was used by default.
+Version 1.1 or 2 (1.29.4) is recommended for use with
 L<ngx_http_upstream_module>
 connections and
 L<NTLM authentication|ngx_http_upstream_module>.
+
+B<NOTE>
+
+Version 2 requires the
+L<ngx_http_v2_module|ngx_http_v2_module> module.
+
 
 
 
@@ -2019,6 +2141,7 @@ Parameter value can contain variables (1.11.6).
 B<syntax:> proxy_next_upstream I<
     C<error> E<verbar>
     C<timeout> E<verbar>
+    C<denied> E<verbar>
     C<invalid_header> E<verbar>
     C<http_500> E<verbar>
     C<http_502> E<verbar>
@@ -2067,6 +2190,25 @@ server, passing a request to it, or reading the response header;
 
 a timeout has occurred while establishing a connection with the
 server, passing a request to it, or reading the response header;
+
+
+=item C<denied>
+
+
+
+the server denied
+the connection (1.29.3);
+
+
+
+B<NOTE>
+
+This parameter is available as part of our
+commercial subscription.
+
+
+
+
 
 
 =item C<invalid_header>
@@ -2167,7 +2309,8 @@ transferring of a response, fixing this is impossible.
 The directive also defines what is considered an
 L<unsuccessful
 attempt|ngx_http_upstream_module> of communication with a server.
-The cases of C<error>, C<timeout> and
+The cases of C<error>, C<timeout>,
+C<denied> and
 C<invalid_header> are always considered unsuccessful attempts,
 even if they are not specified in the directive.
 The cases of C<http_500>, C<http_502>,
@@ -2637,17 +2780,16 @@ Permits passing trailer fields from a proxied server to a client.
 
 B<NOTE>
 
-A trailer section in HTTPE<sol>1.1 is
-L<explicitly
-enabled|https://datatracker.ietf.org/doc/html/rfc9110#section-6.5.1>.
+A trailer section should be
+L<explicitly enabled|https://datatracker.ietf.org/doc/html/rfc9110#section-6.5.1>:
 
 
     
     location / {
-        proxy_http_version 1.1;
-        proxy_set_header Connection "te";
-        proxy_set_header TE "trailers";
-        proxy_pass_trailers on;
+        # proxy_http_version 1.1;  #for versions before 1.29.7
+        proxy_set_header     Connection "te";
+        proxy_set_header     TE "trailers";
+        proxy_pass_trailers  on;
     
         proxy_pass ...
     }
@@ -2908,7 +3050,63 @@ if nginx already started sending the request body.
 When HTTPE<sol>1.1 chunked transfer encoding is used
 to send the original request body,
 the request body will be buffered regardless of the directive value unless
-HTTPE<sol>1.1 is enabled for proxying.
+HTTPE<sol>1.1 or HTTPE<sol>2 is enabled for proxying.
+
+
+
+
+
+
+
+=head2 proxy_request_dynamic
+
+
+B<syntax:> proxy_request_dynamic I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.3.
+
+
+
+
+
+Enables or disables creation of a separate request instance
+for each proxied server.
+By default, a single request is used for all proxied servers.
+If enabled, a separate request instance is created,
+allowing per-server request customization.
+For example, the server-specific C<Host> request header field
+can be set:
+
+    
+    proxy_request_dynamic on;
+    proxy_set_header      Host $upstream_last_server_name;
+
+
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
 
 
 
@@ -3048,11 +3246,34 @@ The I<C<value>> can contain text, variables, and their combinations.
 These directives are inherited from the previous configuration level
 if and only if there are no C<proxy_set_header> directives
 defined on the current level.
-By default, only two fields are redefined:
+
+
+
+
+
+By default, the header fields
+C<Host>
+and
+C<Connection>
+from the original request are not passed to the proxied server.
+If HTTPE<sol>1.0 or HTTPE<sol>1.1 is
+enabled for proxying,
+these fields are redefined:
 
     
     proxy_set_header Host       $proxy_host;
     proxy_set_header Connection close;
+
+
+For HTTPE<sol>2, the
+C<:authority>
+pseudo-header field with the
+I<C<$proxy_host>>
+value is sent by default,
+unless it is replaced with an explicit C<Host> header field.
+
+
+
 
 
 If caching is enabled, the header fields
@@ -3352,6 +3573,17 @@ C<engine>:I<C<name>>:I<C<id>>
 can be specified instead of the I<C<file>> (1.7.9),
 which loads a secret key with a specified I<C<id>>
 from the OpenSSL engine I<C<name>>.
+
+
+
+
+
+The value
+C<store>:I<C<scheme>>:I<C<id>>
+can be specified instead of the I<C<file>> (1.29.0),
+which is used to load a secret key with a specified I<C<id>>
+and OpenSSL provider registered URI I<C<scheme>>, such as
+L<C<pkcs11>|https://datatracker.ietf.org/doc/html/rfc7512>.
 
 
 

@@ -136,7 +136,7 @@ The F<stream.js> file:
 =head2 js_access
 
 
-B<syntax:> js_access I<I<C<function>> E<verbar> I<C<module.function>>>
+B<syntax:> js_access I<I<C<module.function>>>
 
 
 
@@ -536,10 +536,224 @@ with L<Fetch API|reference>.
 
 
 
+=head2 js_fetch_proxy
+
+
+B<syntax:> js_fetch_proxy I<I<C<url>>>
+
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 0.9.4.
+
+
+
+
+
+Configures a forward proxy URL
+with L<Fetch API|reference>.
+The I<C<url>> supports the HTTP scheme only
+and can contain optional user credentials
+in the format C<http:E<sol>E<sol>[user:password@]host:port>
+for Basic authentication.
+Supports both HTTP and HTTPS connections to destination servers.
+If the I<C<url>> is empty, proxy routing is disabled.
+The parameter value can contain variables.
+
+
+
+
+
+Example:
+
+    
+    server {
+        listen 12345;
+        js_fetch_proxy http://user:pass@proxy.example.com:3128;
+        js_preread main.fetch_handler;
+    }
+
+
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive
+
+
+B<syntax:> js_fetch_keepalive I<I<C<connections>>>
+
+
+B<default:> I<0>
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Activates the cache for connections to destination servers.
+When the value is greater than C<0>,
+enables keepalive connections for
+L<Fetch API|reference>.
+
+
+
+
+
+The I<C<connections>> parameter sets the maximum number of idle
+keepalive connections to destination servers that are preserved in the cache
+of each worker process.
+When this number is exceeded, the least recently used connections are closed.
+
+
+
+
+
+Example:
+
+    
+    server {
+        listen 12345;
+        js_fetch_keepalive 32;
+        js_fetch_trusted_certificate /path/to/ISRG_Root_X1.pem;
+        js_preread main.fetch_handler;
+    }
+
+
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive_requests
+
+
+B<syntax:> js_fetch_keepalive_requests I<I<C<number>>>
+
+
+B<default:> I<1000>
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Sets the maximum number of requests that can be served through one keepalive
+connection with L<Fetch API|reference>.
+After the maximum number of requests is made, the connection is closed.
+
+
+
+
+
+Closing connections periodically is necessary to free per-connection memory
+allocations.
+Therefore, using too high maximum number of requests could result in
+excessive memory usage and not recommended.
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive_time
+
+
+B<syntax:> js_fetch_keepalive_time I<I<C<time>>>
+
+
+B<default:> I<1h>
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Limits the maximum time during which requests can be processed through one
+keepalive connection with L<Fetch API|reference>.
+After this time is reached, the connection is closed following the subsequent
+request processing.
+
+
+
+
+
+
+
+=head2 js_fetch_keepalive_timeout
+
+
+B<syntax:> js_fetch_keepalive_timeout I<I<C<time>>>
+
+
+B<default:> I<60s>
+
+
+B<context:> I<stream>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 0.9.2.
+
+
+
+
+
+Sets a timeout during which an idle keepalive connection to a destination server
+will stay open with L<Fetch API|reference>.
+
+
+
+
+
+
+
 =head2 js_filter
 
 
-B<syntax:> js_filter I<I<C<function>> E<verbar> I<C<module.function>>>
+B<syntax:> js_filter I<I<C<module.function>>>
 
 
 
@@ -723,6 +937,88 @@ The L</js_import> directive should be used instead.
 
 
 
+=head2 js_load_stream_native_module
+
+
+B<syntax:> js_load_stream_native_module I<I<C<path>> [C<as> I<C<name>>]>
+
+
+
+B<context:> I<main>
+
+
+
+This directive appeared in version 0.9.5.
+
+
+
+
+
+Loads a L<native module|native_modules>
+(shared library) for use in Stream JavaScript code.
+The directive is
+L<QuickJS|engine>-only
+and is not available when using the njs built-in JavaScript engine.
+
+
+
+
+
+The I<C<path>> parameter
+specifies the absolute path to the shared library file.
+The optional C<as> I<C<name>> parameter
+provides an alias name for importing the module in JavaScript code.
+If not specified, the module can be imported using its filename.
+
+
+
+
+
+Example:
+
+    
+    js_load_stream_native_module /path/to/mylib.so;
+    js_load_stream_native_module /path/to/other.so as myalias;
+    
+    stream {
+        js_import main.js;
+        # ... rest of stream configuration
+    }
+
+
+In JavaScript code:
+
+    
+    // Import by filename
+    import * as mylib from 'mylib.so';
+    
+    // Import by alias
+    import * as myalias from 'myalias';
+    
+    // Use exported functions
+    let result = mylib.add(5, 10);
+
+
+
+
+
+
+
+
+B<NOTE>
+
+For security reasons, this directive is only allowed
+in the C<main> configuration context.
+Native modules run with full process privileges;
+use absolute paths and ensure proper code review.
+
+
+
+
+
+
+
+
 =head2 js_path
 
 
@@ -767,8 +1063,7 @@ since L<0.7.7|changes>.
 =head2 js_periodic
 
 
-B<syntax:> js_periodic I<I<C<function>> E<verbar>
-        I<C<module.function>>
+B<syntax:> js_periodic I<I<C<module.function>>
         [C<interval>=I<C<time>>]
         [C<jitter>=I<C<number>>]
         [C<worker_affinity>=I<C<mask>>]>
@@ -911,7 +1206,7 @@ Several C<js_preload_object> directives can be specified.
 =head2 js_preread
 
 
-B<syntax:> js_preread I<I<C<function>> E<verbar> I<C<module.function>>>
+B<syntax:> js_preread I<I<C<module.function>>>
 
 
 
@@ -1010,7 +1305,7 @@ L<this example|https://github.com/nginx/njs-examples#authorizing-connections-usi
 
 B<syntax:> js_set I<
     I<C<$variable>>
-    I<C<function>> E<verbar> I<C<module.function>>
+    I<C<module.function>>
     [C<nocache>]>
 
 
@@ -1101,7 +1396,8 @@ B<syntax:> js_shared_dict_zone I<
     C<zone>=I<C<name>>:I<C<size>>
     [C<timeout>=I<C<time>>]
     [C<type>=C<string>E<verbar>C<number>]
-    [C<evict>]>
+    [C<evict>]
+    [C<state>=I<C<file>>]>
 
 
 
@@ -1154,6 +1450,15 @@ key-value pair when the zone storage is exhausted.
 
 
 
+The optional C<state> parameter specifies a I<C<file>>
+that keeps the shared dictionary state
+in JSON format and makes it persistent across nginx restarts
+(L<0.9.1|changes>).
+
+
+
+
+
 Example:
 
     
@@ -1168,6 +1473,9 @@ Example:
     
         # Creates a 32Kb permanent dictionary with number values:
         js_shared_dict_zone zone=num:32k type=number;
+    
+        # Creates a 1Mb dictionary with string values and persistent state:
+        js_shared_dict_zone zone=persistent:1M state=/tmp/dict.json;
     
     example.js:
         function get(r) {

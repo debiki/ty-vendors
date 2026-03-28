@@ -13,9 +13,8 @@ ngx_mgmt_module - Module ngx_mgmt_module
 
 The C<ngx_mgmt_module> module enables
 NGINX Plus license verification and usage reporting.
-This is mandatory for each
-L<C<nginxE<sol>1.27.2
-(nginx-plus-r33)>|https://docs.nginx.com/nginx/releases/#nginxplusrelease-33-r33> instance.
+This is mandatory for each NGINX Plus instance since 1.27.2 (
+L<NGINX Plus R33|https://docs.nginx.com/nginx/releases/#r33>).
 
 
 
@@ -33,7 +32,8 @@ L<MyF5|https://my.f5.com>.
 
 
 
-Usage report is sent to F5 licensing endpoint
+Usage report is sent directly or via proxy
+to F5 licensing endpoint
 every hour using the
 secure connection.
 Optionally, in network-restricted environments
@@ -48,6 +48,19 @@ to F5 licensing endpoint.
 
 By default, if the initial usage report
 is not received by F5 licensing endpoint, nginx will stop processing traffic.
+
+
+
+
+
+Automatic license renewal is supported since 1.29.0
+(L<NGINX Plus R35|https://docs.nginx.com/nginx/releases/#r35>)
+for instances that report directly to the F5 licensing endpoint.
+On renewal, NGINX downloads the updated JWT from F5 licensing endpoint
+and applies it without
+configuration L<reload|switches>.
+The updated license is stored
+in the state_path directory.
 
 
 
@@ -170,6 +183,114 @@ Specifies a JWT license I<C<file>>.
 By default, the I<C<license.jwt>> file is expected to be at
 C<E<sol>etcE<sol>nginxE<sol>> for Linux or at
 C<E<sol>usrE<sol>localE<sol>etcE<sol>nginxE<sol>> for FreeBSD.
+
+
+
+
+
+
+
+=head2 proxy
+
+
+B<syntax:> proxy I<I<C<host>>:I<C<port>>>
+
+
+
+B<context:> I<mgmt>
+
+
+
+This directive appeared in version 1.27.4.
+
+
+
+
+
+Sets the HTTP CONNECT proxy
+used for sending the usage report.
+
+
+
+
+
+
+
+=head2 proxy_username
+
+
+B<syntax:> proxy_username I<I<C<string>>>
+
+
+
+B<context:> I<mgmt>
+
+
+
+This directive appeared in version 1.27.4.
+
+
+
+
+
+Sets the user name used for authentication on
+the proxy.
+
+
+
+
+
+
+
+=head2 proxy_password
+
+
+B<syntax:> proxy_password I<I<C<string>>>
+
+
+
+B<context:> I<mgmt>
+
+
+
+This directive appeared in version 1.27.4.
+
+
+
+
+
+Sets the password used for authentication on
+the proxy.
+
+
+
+
+
+The password is sent unencrypted by default.
+If the proxy supports TLS, the connection to the proxy can be
+protected with the L<stream|ngx_stream_proxy_module>
+module:
+
+    
+    mgmt {
+        proxy          127.0.0.1:8080;
+        proxy_username <name>;
+        proxy_password <password>;
+    }
+    
+    stream {
+        server {
+            listen 127.0.0.1:8080;
+            
+            proxy_ssl                     on;
+            proxy_ssl_verify              on;
+            proxy_ssl_trusted_certificate <proxy_ca_file>;
+    
+            proxy_pass <proxy_host>:<proxy_port>;
+        }
+    }
+
+
 
 
 
