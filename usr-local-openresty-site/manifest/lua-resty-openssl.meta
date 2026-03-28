@@ -7,6 +7,6 @@ license = 3bsd
 repo_link = https://github.com/fffonion/lua-resty-openssl
 lib_dir = lib
 doc_dir = lib
-version = 1.5.2
+version = 1.7.1
 main_module = lib/resty/openssl.lua
 requires = luajit

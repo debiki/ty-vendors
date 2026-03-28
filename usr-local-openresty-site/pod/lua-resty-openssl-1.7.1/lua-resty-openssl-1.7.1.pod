@@ -1,0 +1,112 @@
+=encoding utf-8
+
+
+=head1 lua-resty-openssl
+
+
+FFI-based OpenSSL binding for LuaJIT, supporting OpenSSL 3.x, 1.1 series.
+
+OpenSSL 1.1.0, 1.0.2 and BoringSSL support has been dropped, but are still available at the L<0.x branch|https://github.com/fffonion/lua-resty-openssl/tree/0.x>.
+
+!L<Build Status|https://github.com/fffonion/lua-resty-openssl/workflows/Tests/badge.svg> !L<luarocks|https://img.shields.io/luarocks/v/fffonion/lua-resty-openssl?color=%232c3e67> !L<opm|https://img.shields.io/opm/v/fffonion/lua-resty-openssl?color=%23599059>
+
+
+=head1 Description
+
+C<lua-resty-openssl> is a FFI-based OpenSSL binding library, currently
+supports OpenSSL C<3.x> and C<1.1.1> series.
+
+
+
+
+=head1 Status
+
+Production.
+
+
+=head1 Synopsis
+
+This library is greatly inspired by L<luaossl|https://github.com/wahern/luaossl>, while uses the
+naming conversion closer to original OpenSSL API.
+For example, a function called C<X509_set_pubkey> in OpenSSL C API will expect to exist
+as C<resty.openssl.x509:set_pubkey>.
+I<CamelCase>s are replaced to I<underscore_case>s, for exmaple C<X509_set_serialNumber> becomes
+C<resty.openssl.x509:set_serial_number>. Another difference than C<luaossl> is that errors are never thrown
+using C<error()> but instead return as last parameter.
+
+Each Lua table returned by C<new()> contains a cdata object C<ctx>. User are not supposed to manully setting
+C<ffi.gc> or calling corresponding destructor of the C<ctx> struct (like C<*_free> functions).
+
+
+
+Due to the size limit of OPM, the full documentation can be viewed at L<Github|https://github.com/fffonion/lua-resty-openssl/blob/master/README.md>
+
+
+=head1 Copyright and License
+
+This module is licensed under the BSD license.
+
+Copyright (C) 2019-2023, by fffonion E<lt>fffonion@gmail.comE<gt>.
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+
+=over
+
+
+=item *
+
+Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+
+=back
+
+
+=over
+
+
+=item *
+
+Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+
+=back
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+
+
+=head1 See Also
+
+
+=over
+
+
+=item *
+
+L<luaossl|https://github.com/wahern/luaossl>
+
+=item *
+
+L<APIE<sol>ABI changes review for OpenSSL|https://abi-laboratory.pro/index.php?view=timeline&l=openssl>
+
+=item *
+
+L<OpenSSL API manual|https://www.openssl.org/docs/man3.1/man3/>
+
+
+=back
+
+
+
+[NID]: https://github.com/openssl/openssl/blob/master/include/openssl/obj_mac.h
+[RFC 2246]: https://tools.ietf.org/html/rfc2246
+[RFC 2898]: https://tools.ietf.org/html/rfc2898
+[RFC 5246]: https://tools.ietf.org/html/rfc5246
+[RFC 5869]: https://tools.ietf.org/html/rfc5869
+[RFC 7914]: https://tools.ietf.org/html/rfc7914
+[NIST SP 800-132]: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-132.pdf
+[NIST SP 800-135 r1]: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-135r1.pdf

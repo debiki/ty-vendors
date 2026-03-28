@@ -1,6 +1,7 @@
 
 local ffi = require "ffi"
 local C = ffi.C
+local ffi_str = ffi.string
 
 
 local evp_macro = require "resty.openssl.include.evp"
@@ -11,7 +12,12 @@ local bn_lib = require "resty.openssl.bn"
 local digest_lib = require "resty.openssl.digest"
 local encode_base64url = require "resty.openssl.auxiliary.compat".encode_base64url
 local decode_base64url = require "resty.openssl.auxiliary.compat".decode_base64url
+local param_lib = require "resty.openssl.param"
 local json = require "resty.openssl.auxiliary.compat".json
+local ctypes = require "resty.openssl.auxiliary.ctypes"
+local format_error = require "resty.openssl.err".format_error
+
+local OPENSSL_3X = require("resty.openssl.version").OPENSSL_3X
 
 local _M = {}
 
@@ -264,6 +270,243 @@ function _M.dump_jwk(pkey, is_priv)
   jwk.kid = encode_base64url(d)
 
   return json.encode(jwk)
+end
+
+
+-- 3.x load_jwk
+
+local settable_schema = {}
+
+local function get_settable_schema(type, selection, properties)
+  -- the pctx can't be reused after EVP_PKEY_fromdata_settable, so we create a new here
+  local pctx = C.EVP_PKEY_CTX_new_from_name(nil, type, properties)
+  if pctx == nil then
+    return nil, "EVP_PKEY_CTX_new_from_name() failed"
+  end
+  ffi.gc(pctx, C.EVP_PKEY_CTX_free)
+
+  if C.EVP_PKEY_fromdata_init(pctx) ~= 1 then
+    return nil, "EVP_PKEY_fromdata_init() failed"
+  end
+
+  if settable_schema[type] then
+    return settable_schema[type]
+  end
+
+  local settable = C.EVP_PKEY_fromdata_settable(pctx, selection)
+  if settable == nil then
+    return nil, "EVP_PKEY_fromdata_settable() failed"
+  end
+
+  local schema = {}
+  param_lib.parse_params_schema(settable, schema, nil)
+
+  settable_schema[type] = schema
+  return schema
+end
+
+local ossl_params_jwk_mapping = {
+  RSA = {
+    n = "n",
+    e = "e",
+    d = "d",
+    p = "rsa-factor1",
+    q = "rsa-factor2",
+    dp = "rsa-exponent1",
+    dq = "rsa-exponent2",
+    qi = "rsa-coefficient1",
+  },
+  EC = {
+    x = "x",
+    y = "y",
+    d = "priv",
+    crv = "group",
+  },
+  OKP = {
+    x = "pub",
+    d = "priv",
+  },
+}
+
+local jwk_params_required_mapping = {
+  RSA = {
+    n = true,
+    e = true,
+  },
+  EC = {
+    crv = true,
+    x = true,
+    y = true,
+  },
+  -- OKP required parameters are checked elsewhere
+  OKP = {},
+}
+
+local ec_coord_size_map = {
+  -- JWK RFC7518
+  ["P-256"] = 32,
+  ["P-384"] = 48,
+  ["P-521"] = 66, -- rounded up to the next byte
+  -- JOSE RFC8812 and others
+  prime256v1 = 32,
+  secp384r1 = 48,
+  secp521r1 = 66, -- rounded up to the next byte
+  brainpoolP256r1 = 32,
+  brainpoolP320r1 = 40,
+  brainpoolP384r1 = 48,
+  brainpoolP512r1 = 64, -- note this is 512 not 521
+  secp256k1 = 32,
+}
+-- Pad coordinates to field size with leading zeros
+local function pad_ec_coordinate(coord, crv)
+  local size = ec_coord_size_map[crv]
+  if not size then
+    return nil, "unsupported curve " .. tostring(crv)
+  end
+  if #coord < size then
+    return string.rep("\x00", size - #coord) .. coord
+  elseif #coord > size then
+    return nil, "coordinate length " .. #coord .. " is longer than expected " .. size
+  else
+    return coord
+  end
+end
+
+function _M.load_jwk_ex(txt, ptyp, properties)
+  local tbl, err = json.decode(txt)
+  if err then
+    return nil, "jwk:load_jwk: error decoding JSON from JWK: " .. err
+  elseif type(tbl) ~= "table" then
+    return nil, "jwk:load_jwk: except input to be decoded as a table, got " .. type(tbl)
+  elseif not tbl["kty"] then
+    return nil, "jwk:load_jwk: missing \"kty\" parameter from JWK"
+  end
+
+  local kty = tbl["kty"]
+  tbl["kty"] = nil
+  local selection = ptyp == "pu" and evp_macro.EVP_PKEY_PUBLIC_KEY or evp_macro.EVP_PKEY_KEYPAIR
+
+  local pkey_name = kty
+  if kty == "OKP" then
+    pkey_name = tbl["crv"]
+    if not pkey_name then
+      return nil, "jwk:load_jwk: missing \"crv\" parameter from OKP JWK"
+    end
+    tbl["crv"] = nil
+
+    if not tbl["x"] and not tbl["d"] then
+      return nil, "jwk:load_jwk: missing at least one of \"x\" or \"d\" parameter from OKP JWK"
+    end
+
+    if tbl["d"] and selection == evp_macro.EVP_PKEY_PUBLIC_KEY then
+      -- if only 'd' is provided and we want to import a public key, first create a private key
+      selection = evp_macro.EVP_PKEY_KEYPAIR
+    end
+  end
+
+  local ctx = ffi.new("EVP_PKEY*[1]")
+  local pctx = C.EVP_PKEY_CTX_new_from_name(nil, pkey_name, nil)
+  if pctx == nil then
+    return nil, "jwk:load_jwk: EVP_PKEY_CTX_new_from_name() failed"
+  end
+  ffi.gc(pctx, C.EVP_PKEY_CTX_free)
+
+  if C.EVP_PKEY_fromdata_init(pctx) ~= 1 then
+    return nil, "jwk:load_jwk: EVP_PKEY_fromdata_init() failed"
+  end
+
+  local schema, err = get_settable_schema(pkey_name, selection, properties)
+  if not schema then
+    return nil, "jwk:load_jwk: failed to get key schema for " .. pkey_name .. " key: " .. err
+  end
+
+  local mapping = ossl_params_jwk_mapping[kty]
+  if not mapping then
+    return nil, "jwk:load_jwk: not yet supported jwk type \"" .. (tbl["kty"] or "nil") .. "\""
+  end
+  local required = jwk_params_required_mapping[kty]
+
+  local params_t = {}
+
+  for kfrom, kto in pairs(mapping) do
+    local v = tbl[kfrom]
+    if type(v) == "string" and (selection == evp_macro.EVP_PKEY_KEYPAIR or required[kfrom]) then
+      if kfrom ~= "crv" then
+        v = decode_base64url(v)
+        if not v then
+          return nil, "jwk:load_jwk: cannot decode parameter \"" .. kfrom .. "\" from base64 " .. tbl[kfrom]
+        end
+        -- reverse endian expect for OKP keys
+        if kty ~= "OKP" or (kfrom ~= "x" and kfrom ~= "d") then
+          v = v:reverse()
+        end
+      end
+
+      params_t[kto] = v
+    elseif required[kfrom] then
+      return nil, "jwk:load_jwk: missing required parameter \"" .. kfrom .. "\""
+    end
+  end
+
+  if kty == "EC" then
+    if params_t["x"] and params_t["y"] then
+      local x = params_t["x"]:reverse()
+      local y = params_t["y"]:reverse()
+      x, err = pad_ec_coordinate(x, tbl["crv"])
+      if err then
+        return nil, "jwk:load_jwk: pad_ec_coordinate: " .. err
+      end
+      y, err = pad_ec_coordinate(y, tbl["crv"])
+      if err then
+        return nil, "jwk:load_jwk: pad_ec_coordinate: " .. err
+      end
+      params_t["pub"] = "\x04" .. x .. y
+      params_t["x"], params_t["y"] = nil, nil
+    end
+  end
+
+  local params, err = param_lib.construct(params_t, nil, schema)
+  if params == nil then
+    return nil, "jwk:load_jwk: failed to construct parameters for " .. kty .. " key: " .. err
+  end
+
+  if C.EVP_PKEY_fromdata(pctx, ctx, selection, params) ~= 1 then
+    return nil, format_error("jwk:load_jwk: EVP_PKEY_fromdata()")
+  end
+
+  if kty == "OKP" and ptyp == "pu" and params_t["priv"] then
+    -- re-export the pubkey
+    local MAX_ECX_KEY_SIZE = 114 -- ed448 uses 114 bytes
+    local buf = ctypes.uchar_array(MAX_ECX_KEY_SIZE)
+    local length = ctypes.ptr_of_size_t(MAX_ECX_KEY_SIZE)
+
+    if C.EVP_PKEY_get_raw_public_key(ctx[0], buf, length) ~= 1 then
+      C.EVP_PKEY_free(ctx[0])
+      return nil, format_error("jwk:load_jwk: unable to derive public key from private key OKP JWK")
+    end
+
+    params_t["pub"] = ffi_str(buf, length[0])
+
+    C.EVP_PKEY_free(ctx[0])
+    ctx[0] = nil
+
+    local params, err = param_lib.construct(params_t, nil, schema)
+    if params == nil then
+      return nil, "jwk:load_jwk: failed to construct parameters for " .. kty .. " key: " .. err
+    end
+
+    if C.EVP_PKEY_fromdata(pctx, ctx, evp_macro.EVP_PKEY_PUBLIC_KEY, params) ~= 1 then
+      return nil, format_error("jwk:load_jwk: EVP_PKEY_fromdata()")
+    end
+
+    return ctx[0]
+  end
+
+  return ctx[0]
+end
+
+if OPENSSL_3X then
+  _M.load_jwk = _M.load_jwk_ex
 end
 
 return _M

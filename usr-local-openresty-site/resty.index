@@ -64,11 +64,11 @@ module lua-resty-lrucache-0.08
 # END lua-resty-lrucache
 # BEGIN lua-resty-openssl
 
-dist lua-resty-openssl-1.5.2
+dist lua-resty-openssl-1.7.1
   aliases resty.openssl
-  modules lua-resty-openssl-1.5.2 lua-resty-openssl-1.5.2
+  modules lua-resty-openssl-1.7.1
 
-module lua-resty-openssl-1.5.2
+module lua-resty-openssl-1.7.1
   aliases resty.openssl
   section 18 544 lua-resty-openssl
   section 544 684 description
@@ -76,9 +76,6 @@ module lua-resty-openssl-1.5.2
   section 713 1619 synopsis
   section 1619 3073 copyright and license
   section 3073 3871 see also
-
-module lua-resty-openssl-1.5.2
-  aliases resty.openssl
 
 # END lua-resty-openssl
 # BEGIN luafilesystem
@@ -95,16 +92,16 @@ module luafilesystem-0.1
 # END luafilesystem
 # BEGIN lua-resty-acme
 
-dist lua-resty-acme-0.14.0
+dist lua-resty-acme-0.16.0
   aliases resty.acme
-  modules lua-resty-acme-0.14.0 resty.acme.storage.readme
+  modules lua-resty-acme-0.16.0 resty.acme.storage.readme
 
-module lua-resty-acme-0.14.0
+module lua-resty-acme-0.16.0
   aliases resty.acme
   section 18 515 lua-resty-acme
   section 515 1272 description
   section 1272 1301 status
-  section 1301 28327 synopsis
+  section 1301 28347 synopsis
   section 4678 5422 wildcard certificates
   section 5422 7944 advanced usage
   section 5447 7101 use a function to include domains
@@ -119,20 +116,20 @@ module lua-resty-acme-0.14.0
   section 23028 23313 client:order_certificate
   section 23313 23561 client:serve_http_challenge
   section 23561 23846 client:serve_tls_alpn_challenge
-  section 23846 27758 storage adapters
+  section 23846 27778 storage adapters
   section 24237 24532 file
   section 24532 24731 shm
-  section 24731 25197 redis
-  section 25197 26921 vault
-  section 26222 26921 support for different auth method
-  section 26921 27250 consul
-  section 27250 27758 etcd
-  section 27758 28327 dns providers
-  section 28327 28392 todo
-  section 28392 28556 testing
-  section 28556 28873 credits
-  section 28873 30322 copyright and license
-  section 30322 30843 see also
+  section 24731 25193 redis
+  section 25193 26917 vault
+  section 26218 26917 support for different auth method
+  section 26917 27246 consul
+  section 27246 27778 etcd
+  section 27778 28347 dns providers
+  section 28347 28412 todo
+  section 28412 28576 testing
+  section 28576 28893 credits
+  section 28893 30342 copyright and license
+  section 30342 30863 see also
 
 module resty.acme.storage.readme
   section 18 785 resty.acme.storage

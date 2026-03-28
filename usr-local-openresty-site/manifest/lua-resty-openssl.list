@@ -20,6 +20,7 @@ lualib/resty/openssl/err.lua
 lualib/resty/openssl/objects.lua
 lualib/resty/openssl/cipher.lua
 lualib/resty/openssl/pkcs12.lua
+lualib/resty/openssl/crypto.lua
 lualib/resty/openssl/ssl.lua
 lualib/resty/openssl/digest.lua
 lualib/resty/openssl/x509/store.lua
@@ -76,4 +77,4 @@ lualib/resty/openssl/auxiliary/jwk.lua
 lualib/resty/openssl/auxiliary/bio.lua
 lualib/resty/openssl/auxiliary/ctypes.lua
 lualib/resty/openssl/auxiliary/ecdsa.lua
-pod/lua-resty-openssl-1.5.2/lua-resty-openssl-1.5.2.pod
+pod/lua-resty-openssl-1.7.1/lua-resty-openssl-1.7.1.pod

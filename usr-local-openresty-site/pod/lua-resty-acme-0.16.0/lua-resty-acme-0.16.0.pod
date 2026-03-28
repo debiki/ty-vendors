@@ -768,7 +768,7 @@ Redis based storage. The default config is:
         namespace = "",
     }
 
-Redis E<gt>= 2.6.0 is required as this storage requires L<PEXPIRE|https://redis.io/commands/pexpire>.
+Redis E<gt>= 2.6.12 is required as this storage requires L<SET EX|https://redis.io/commands/set>.
 
 
 =head3 vault
@@ -859,13 +859,13 @@ Hashicorp L<Consul|https://www.consul.io/> based storage. The default config is:
 =head3 etcd
 
 
-L<etcd|https://etcd.io> based storage. Right now only C<v2> protocol is supported.
+L<etcd|https://etcd.io> based storage. Right now only C<v3> protocol is supported, and etcd server
+version should be E<gt>= v3.4.0.
 The default config is:
 
 
     storage_config = {
         http_host = 'http://127.0.0.1:4001',
-        protocol = 'v2',
         key_prefix = '',
         timeout = 60,
         ssl_verify = false,
