@@ -140,12 +140,17 @@ Then maybe look at the changes in Git. Delete `source-old/`.
 
 #### 5) Upgrade Dockerfile
 
-You might need to do some tweaks in ../Dockerfile.or — for example, bumping the
-Alpine OS version.  To find out what to change, find OpenResty's Dockerfile for
+You might need to do some tweaks in ../Dockerfile — for example, bumping the
+Alpine OS version.
+
+To find out what to change, find OpenResty's Dockerfile for
 the last version of OpenResty you were using, and the new version, run a diff,
 look at the changes and apply the relevant ones (usually just a few).  Here's the
 Dockerfile: https://github.com/openresty/docker-openresty/blob/master/alpine/Dockerfile
 — click History and look at the older versions.
+
+Or, simpler: Clone https://github.com/openresty/docker-openresty, then,
+sth like: `git diff 1.27.1.2-0 HEAD -- alpine/` to see what changed.
 
 
 #### 6) Commit, rebuild
