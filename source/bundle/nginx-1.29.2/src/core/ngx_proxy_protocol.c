@@ -29,17 +29,17 @@
 #define NGX_PROXY_PROTOCOL_V2_FAM_INET6        0x20
 
 #define NGX_PROXY_PROTOCOL_V2_TYPE_ALPN             0x01
-#define NGX_PROXY_PROTOCOL_V2_TYPE_AUTHORITY        0x02 # Not implemented
-#define NGX_PROXY_PROTOCOL_V2_TYPE_CRC32C           0x03 # Not implemented
-#define NGX_PROXY_PROTOCOL_V2_TYPE_NOOP             0x04 # Not implemented
-#define NGX_PROXY_PROTOCOL_V2_TYPE_UNIQUE_ID        0x05 # Not implemented
+#define NGX_PROXY_PROTOCOL_V2_TYPE_AUTHORITY        0x02 /* Not implemented */
+#define NGX_PROXY_PROTOCOL_V2_TYPE_CRC32C           0x03 /* Not implemented */
+#define NGX_PROXY_PROTOCOL_V2_TYPE_NOOP             0x04 /* Not implemented */
+#define NGX_PROXY_PROTOCOL_V2_TYPE_UNIQUE_ID        0x05 /* Not implemented */
 #define NGX_PROXY_PROTOCOL_V2_TYPE_SSL              0x20
 #define NGX_PROXY_PROTOCOL_V2_SUBTYPE_SSL_VERSION   0x21
 #define NGX_PROXY_PROTOCOL_V2_SUBTYPE_SSL_CN        0x22
 #define NGX_PROXY_PROTOCOL_V2_SUBTYPE_SSL_CIPHER    0x23
 #define NGX_PROXY_PROTOCOL_V2_SUBTYPE_SSL_SIG_ALG   0x24
 #define NGX_PROXY_PROTOCOL_V2_SUBTYPE_SSL_KEY_ALG   0x25
-#define NGX_PROXY_PROTOCOL_V2_TYPE_NETNS            0x30 # Not implemented
+#define NGX_PROXY_PROTOCOL_V2_TYPE_NETNS            0x30 /* Not implemented */
 
 #define NGX_PROXY_PROTOCOL_V2_CLIENT_SSL            0x01
 #define NGX_PROXY_PROTOCOL_V2_CLIENT_CERT_CONN      0x02
@@ -854,6 +854,10 @@ ngx_proxy_protocol_v2_write(ngx_connection_t *c, u_char *buf, u_char *last)
         data = NULL;
         data_len = 0;
 
+        if (last - (buf + len) < (long) sizeof(ngx_tlv_ssl_t)) {
+            return NULL;
+        }
+
         tlv = (ngx_tlv_ssl_t *) (buf + len);
         ngx_memzero(tlv, sizeof(ngx_tlv_ssl_t));
 
@@ -924,7 +928,7 @@ ngx_proxy_protocol_v2_write(ngx_connection_t *c, u_char *buf, u_char *last)
                         if(value != NULL) {
                             pos = ngx_copy_tlv(pos, last,
                                         NGX_PROXY_PROTOCOL_V2_SUBTYPE_SSL_CN,
-                                        value, ngx_strlen(value));
+                                        value, (uint16_t) ASN1_STRING_length(subject_name_cn_data_asn1));
                             if (pos == NULL) {
                                 X509_free(crt);
                                 return NULL;
@@ -1048,7 +1052,7 @@ ngx_copy_tlv(u_char *pos, u_char *last, u_char type,
 {
     ngx_tlv_t   *tlv;
 
-    if (last - pos < (long) sizeof(*tlv)) {
+    if (last - pos < (long) (sizeof(*tlv) + value_len)) {
         return NULL;
     }
 

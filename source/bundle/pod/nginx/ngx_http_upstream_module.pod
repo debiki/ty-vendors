@@ -757,8 +757,10 @@ servers using the C<ip_hash> load balancing method.
 =head2 keepalive
 
 
-B<syntax:> keepalive I<I<C<connections>>>
+B<syntax:> keepalive I<I<C<connections>> [C<local>]>
 
+
+B<default:> I<32 local>
 
 
 B<context:> I<upstream>
@@ -771,7 +773,22 @@ This directive appeared in version 1.1.4.
 
 
 
-Activates the cache for connections to upstream servers.
+Enables or disables caching of keepalive connections to upstream servers.
+Since 1.29.7, by default the cache for connections is activated
+and these connections are not
+shared between different
+L<locations|ngx_http_core_module>.
+
+
+
+
+
+The C<local> parameter (1.29.7) disables sharing of
+cached keepalive connections across different locations
+even if the upstream server address matches.
+If the C<local> parameter is not specified,
+any matching cached connection to the same upstream server
+can be reused regardless of a location.
 
 
 
@@ -782,6 +799,13 @@ idle keepalive connections to upstream servers that are preserved in
 the cache of each worker process.
 When this number is exceeded, the least recently used connections
 are closed.
+The zero value disables keepalive connections to upstream servers.
+
+B<NOTE>
+
+Since 1.29.7, keepalive connections are enabled by default, with a
+default limit of I<C<32>> connections per each worker process.
+
 
 B<NOTE>
 
@@ -795,8 +819,8 @@ to let upstream servers process new incoming connections as well.
 
 B<NOTE>
 
-When using load balancing methods other than the default
-round-robin method, it is necessary to activate them before
+Before 1.29.7, when using load balancing methods other than the default
+round-robin method, it was necessary to activate them before
 the C<keepalive> directive.
 
 
@@ -848,8 +872,8 @@ This example is for versions prior to 1.29.7:
     
         location /http/ {
             proxy_pass http://http_backend;
-            proxy_http_version 1.1;
-            proxy_set_header Connection "";
+            # proxy_http_version 1.1; # before version 1.29.7
+            # proxy_set_header Connection ""; # before version 1.29.7
             ...
         }
     }
@@ -1066,8 +1090,8 @@ This example is for versions prior to 1.29.7:
     
         location /http/ {
             proxy_pass http://http_backend;
-            proxy_http_version 1.1;
-            proxy_set_header Connection "";
+            # proxy_http_version 1.1; # before version 1.29.7
+            # proxy_set_header Connection ""; # before version 1.29.7
             ...
         }
     }
@@ -1185,7 +1209,8 @@ Prior to version 1.11.6, incomplete requests were taken into account by default.
 
 B<NOTE>
 
-This directive is available as part of our
+Prior to version 1.31.0,
+this directive was available only as part of our
 commercial subscription.
 
 

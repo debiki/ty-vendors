@@ -652,6 +652,10 @@ B<context:> I<upstream>
 
 
 
+This directive appeared in version 1.7.11.
+
+
+
 
 
 Specifies that a group should use a load balancing method where a connection
@@ -690,7 +694,8 @@ incomplete connections were taken into account by default.
 
 B<NOTE>
 
-This directive is available as part of our
+Prior to version 1.31.0,
+this directive was available only as part of our
 commercial subscription.
 
 

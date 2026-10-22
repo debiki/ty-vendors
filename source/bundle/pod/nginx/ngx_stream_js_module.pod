@@ -34,6 +34,9 @@ L<0.4.0|changes>.
 
     
     stream {
+        # since 0.9.1
+        js_engine qjs;
+    
         js_import stream.js;
     
         js_set $bar stream.bar;
@@ -265,6 +268,19 @@ Sets a L<JavaScript engine|engine>
 to be used for njs scripts.
 The C<njs> parameter sets the njs engine, also used by default.
 The C<qjs> parameter sets the QuickJS engine.
+
+
+
+
+
+
+B<NOTE>
+
+The C<njs> engine is deprecated
+since L<1.0.0|changes>;
+new configurations should use the C<qjs>
+(L<QuickJS|engine>) engine.
+
 
 
 

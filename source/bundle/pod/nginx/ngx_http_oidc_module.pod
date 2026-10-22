@@ -596,6 +596,8 @@ B<context:> I<oidc_provider>
 Specifies a I<C<file>> with revoked certificates (CRL)
 in the PEM format used to verify
 the certificates of the OpenID Provider endpoints.
+When using intermediate certificates, their CRLs should be
+specified in the same file.
 
 
 

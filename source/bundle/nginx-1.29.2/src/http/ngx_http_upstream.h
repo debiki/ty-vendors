@@ -56,6 +56,8 @@
 #define NGX_HTTP_UPSTREAM_IGN_XA_CHARSET     0x00000100
 #define NGX_HTTP_UPSTREAM_IGN_VARY           0x00000200
 
+#define NGX_HTTP_UPSTREAM_NOTIFY_CACHED_CONNECTION_ERROR 0x1
+
 
 typedef struct {
     ngx_uint_t                       status;

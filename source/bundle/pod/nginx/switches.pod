@@ -56,6 +56,24 @@ for example,
 
 =item *
 
+C<-l I<C<port>>>E<mdash>enable
+L<nginx control REST API|https://docs.nginx.com/nginx/admin-guide/basic-functionality/runtime-control#control-api>
+on a specified I<C<port>> or UNIX-domain socket (1.29.8).
+
+
+
+B<NOTE>
+
+This parameter is available as part of our
+commercial subscription.
+
+
+
+
+
+
+=item *
+
 C<-p I<C<prefix>>>E<mdash>set nginx path prefix,
 i.e. a directory that will keep server files
 (default value is I<C<E<sol>usrE<sol>localE<sol>nginx>>).

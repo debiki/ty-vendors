@@ -1045,6 +1045,78 @@ equal to “0” then the response will be passed:
 
 
 
+B<NOTE>
+
+C<103> (C<Early Hints>) responses received from
+an upstream server are passed to a client as is, without interpretation.
+
+
+
+
+
+
+
+
+=head2 error_log_tag
+
+
+B<syntax:> error_log_tag I< I<C<name>> I<C<value>>>
+
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+B<context:> I<location>
+
+
+
+This directive appeared in version 1.29.8.
+
+
+
+
+
+Defines an additional context tag for HTTP
+L<error log|ngx_core_module> messages in
+text or L<JSON|ngx_core_module>
+format, in addition to default tags.
+The C<value> can contain text, variables, and their combination:
+
+    
+    error_log_tag  request_id  $request_id;
+
+
+
+
+
+
+
+Several C<error_log_tag> directives
+can be specified on the same level.
+These directives are inherited from the previous configuration level
+if and only if there are no C<error_log_tag> directives
+defined on the current level.
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
 
 =head2 error_page
 
@@ -2073,7 +2145,6 @@ B<syntax:> listen I<
     [C<http2> E<verbar>
      C<quic>]
     [C<proxy_protocol>]
-    [C<multipath>]
     [C<setfib>=I<C<number>>]
     [C<fastopen>=I<C<number>>]
     [C<backlog>=I<C<number>>]
@@ -2084,6 +2155,7 @@ B<syntax:> listen I<
     [C<bind>]
     [C<ipv6only>=C<on>E<verbar>C<off>]
     [C<reuseport>]
+    [C<multipath>]
     [C<so_keepalive>=C<on>E<verbar>C<off>E<verbar>[I<C<keepidle>>]:[I<C<keepintvl>>]:[I<C<keepcnt>>]]>
 
 
@@ -2094,7 +2166,6 @@ B<syntax:> listen I<
     [C<http2> E<verbar>
      C<quic>]
     [C<proxy_protocol>]
-    [C<multipath>]
     [C<setfib>=I<C<number>>]
     [C<fastopen>=I<C<number>>]
     [C<backlog>=I<C<number>>]
@@ -2105,6 +2176,7 @@ B<syntax:> listen I<
     [C<bind>]
     [C<ipv6only>=C<on>E<verbar>C<off>]
     [C<reuseport>]
+    [C<multipath>]
     [C<so_keepalive>=C<on>E<verbar>C<off>E<verbar>[I<C<keepidle>>]:[I<C<keepintvl>>]:[I<C<keepcnt>>]]>
 
 
@@ -2115,7 +2187,6 @@ B<syntax:> listen I<
     [C<http2> E<verbar>
      C<quic>]
     [C<proxy_protocol>]
-    [C<multipath>]
     [C<backlog>=I<C<number>>]
     [C<rcvbuf>=I<C<size>>]
     [C<sndbuf>=I<C<size>>]
@@ -2241,23 +2312,6 @@ protocol|http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt>.
 B<NOTE>
 
 The PROXY protocol version 2 is supported since version 1.13.11.
-
-
-
-
-
-
-The C<multipath> parameter configures a listening socket
-for working with
-L<Multipath TCP|https://datatracker.ietf.org/doc/html/rfc8684>
-protocol (1.29.7).
-
-B<NOTE>
-
-Adding or removing this parameter will also enable
-the C<SO_REUSEPORT> socket option, which may have
-the same security implications as when using
-the reuseport parameter.
 
 
 
@@ -2409,7 +2463,7 @@ C<fastopen>,
 C<backlog>, C<rcvbuf>,
 C<sndbuf>, C<accept_filter>,
 C<deferred>, C<ipv6only>,
-C<reuseport>,
+C<reuseport>, C<multipath>,
 or C<so_keepalive> parameters
 are used then for a given
 I<C<address>>:I<C<port>> pair
@@ -2459,6 +2513,27 @@ and FreeBSD 12+ (1.15.1).
 B<NOTE>
 
 Inappropriate use of this option may have its security
+L<implications|http://man7.org/linux/man-pages/man7/socket.7.html>.
+
+
+
+
+=item 
+C<multipath>
+
+
+
+
+
+this parameter (1.29.7) configures the
+L<Multipath TCP|https://datatracker.ietf.org/doc/html/rfc8684>
+protocol (C<IPPROTO_MPTCP>) for the listening socket.
+This currently works only on Linux 5.6+.
+
+B<NOTE>
+
+Adding or removing this parameter will also enable
+the C<SO_REUSEPORT> socket option, which may have its security
 L<implications|http://man7.org/linux/man-pages/man7/socket.7.html>.
 
 
@@ -2764,6 +2839,39 @@ B<context:> I<location>
 
 Enables or disables logging of subrequests into
 L<ngx_http_log_module>.
+
+
+
+
+
+
+
+=head2 max_headers
+
+
+B<syntax:> max_headers I<I<C<number>>>
+
+
+B<default:> I<1000>
+
+
+B<context:> I<http>
+
+
+B<context:> I<server>
+
+
+
+This directive appeared in version 1.29.8.
+
+
+
+
+
+Sets the maximum allowed number of header lines in requests.
+If this limit is reached, the error
+C<400> (C<Bad Request>)
+is returned.
 
 
 
@@ -4023,10 +4131,8 @@ Before 0.8.48, the machine’s hostname was used by default.
 
 
 
-During searching for a virtual server by name,
-if the name matches more than one of the specified variants,
-(e.g. both a wildcard name and regular expression match), the first matching
-variant will be chosen, in the following order of priority:
+The search is performed in the following order of priority
+and terminates on the first matching variant:
 
 =over
 
@@ -5533,6 +5639,26 @@ that support the C<TCP_INFO> socket option
 
 
 local time in the ISO 8601 standard format (1.3.12, 1.2.7)
+
+
+
+=item C<$time_iso8601_ms>
+
+
+
+
+local time in the ISO 8601 standard format
+with a millisecond resolution (1.29.8)
+
+
+
+B<NOTE>
+
+This variable is available as part of our
+commercial subscription.
+
+
+
 
 
 

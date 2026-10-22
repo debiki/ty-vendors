@@ -51,9 +51,8 @@ They may be defined using exact names, wildcard names, or regular expressions:
 
 
 
-When searching for a virtual server by name, if name matches more than one of
-the specified variants, e.g. both wildcard name and regular expression match,
-the first matching variant will be chosen, in the following order of precedence:
+The search is performed in the following order of priority
+and terminates on the first matching variant:
 
 =over
 
@@ -62,27 +61,28 @@ the first matching variant will be chosen, in the following order of precedence:
 
 =item 1.
 
-exact name
+the exact name
 
 
 
 =item 2.
 
-longest wildcard name starting with an asterisk, e.g.
-“C<*.example.org>”
+the longest wildcard name starting with an asterisk,
+e.g. “C<*.example.org>”
 
 
 
 =item 3.
 
-longest wildcard name ending with an asterisk, e.g. “C<mail.*>”
+the longest wildcard name ending with an asterisk,
+e.g. “C<mail.*>”
 
 
 
 =item 4.
 
-first matching regular expression
-(in order of appearance in a configuration file)
+the first matching regular expression
+(in order of appearance in the configuration file)
 
 
 

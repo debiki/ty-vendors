@@ -83,7 +83,6 @@ B<syntax:> listen I<
     [C<ssl>]
     [C<udp>]
     [C<proxy_protocol>]
-    [C<multipath>]
     [C<setfib>=I<C<number>>]
     [C<fastopen>=I<C<number>>]
     [C<backlog>=I<C<number>>]
@@ -94,6 +93,7 @@ B<syntax:> listen I<
     [C<bind>]
     [C<ipv6only>=C<on>E<verbar>C<off>]
     [C<reuseport>]
+    [C<multipath>]
     [C<so_keepalive>=C<on>E<verbar>C<off>E<verbar>[I<C<keepidle>>]:[I<C<keepintvl>>]:[I<C<keepcnt>>]]>
 
 
@@ -185,23 +185,6 @@ protocol|http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt>.
 B<NOTE>
 
 The PROXY protocol version 2 is supported since version 1.13.11.
-
-
-
-
-
-
-The C<multipath> parameter configures a listening socket
-for working with
-L<Multipath TCP|https://datatracker.ietf.org/doc/html/rfc8684>
-protocol (1.29.7).
-
-B<NOTE>
-
-Adding or removing this parameter will also enable
-the C<SO_REUSEPORT> socket option, which may have
-the same security implications as when using
-the reuseport parameter.
 
 
 
@@ -346,7 +329,7 @@ C<fastopen>,
 C<backlog>, C<rcvbuf>,
 C<sndbuf>, C<accept_filter>,
 C<deferred>, C<ipv6only>,
-C<reuseport>,
+C<reuseport>, C<multipath>,
 or C<so_keepalive> parameters
 are used then for a given
 I<C<address>>:I<C<port>> pair
@@ -389,6 +372,27 @@ and FreeBSD 12+ (1.15.1).
 B<NOTE>
 
 Inappropriate use of this option may have its security
+L<implications|http://man7.org/linux/man-pages/man7/socket.7.html>.
+
+
+
+
+=item 
+C<multipath>
+
+
+
+
+
+this parameter (1.29.7) configures the
+L<Multipath TCP|https://datatracker.ietf.org/doc/html/rfc8684>
+protocol (C<IPPROTO_MPTCP>) for the listening socket.
+This currently works only on Linux 5.6+.
+
+B<NOTE>
+
+Adding or removing this parameter will also enable
+the C<SO_REUSEPORT> socket option, which may have its security
 L<implications|http://man7.org/linux/man-pages/man7/socket.7.html>.
 
 
@@ -828,10 +832,8 @@ machine’s hostname is inserted.
 
 
 
-During searching for a virtual server by name,
-if the name matches more than one of the specified variants,
-(e.g. both a wildcard name and regular expression match), the first matching
-variant will be chosen, in the following order of priority:
+The search is performed in the following order of priority
+and terminates on the first matching variant:
 
 =over
 
@@ -1497,6 +1499,26 @@ L<number of connections|ngx_stream_limit_conn_module>
 
 
 local time in the ISO 8601 standard format
+
+
+
+=item C<$time_iso8601_ms>
+
+
+
+
+local time in the ISO 8601 standard format
+with a millisecond resolution (1.29.8)
+
+
+
+B<NOTE>
+
+This variable is available as part of our
+commercial subscription.
+
+
+
 
 
 

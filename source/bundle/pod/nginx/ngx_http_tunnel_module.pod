@@ -11,21 +11,9 @@ ngx_http_tunnel_module - Module ngx_http_tunnel_module
 
 
 
-The C<ngx_http_tunnel_module> (1.29.3) handles
-L<CONNECT
-requests|https://datatracker.ietf.org/doc/html/rfc9110#section-9.3.6>
-and establishes an end-to-end virtual connection.
-
-
-
-
-
-
-B<NOTE>
-
-This module is available as part of our
-commercial subscription.
-
+The C<ngx_http_tunnel_module> (1.31.0) handles HTTPE<sol>1.1
+L<CONNECT|https://datatracker.ietf.org/doc/html/rfc9110#section-9.3.6>
+requests and establishes an end-to-end virtual connection.
 
 
 
@@ -120,6 +108,17 @@ Parameter values can contain variables:
 
 
 
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
+
+
+
+
+
+
+
 
 =head2 tunnel_bind
 
@@ -190,6 +189,17 @@ at each connection attempt:
     tunnel_bind         $bind_addr;
     tunnel_bind_dynamic on;
 
+
+
+
+
+
+
+
+B<NOTE>
+
+This directive is available as part of our
+commercial subscription.
 
 
 
@@ -314,6 +324,17 @@ server, passing a request to it, or reading data from the server;
 
 the server denied
 the connection;
+
+
+
+B<NOTE>
+
+This parameter is available as part of our
+commercial subscription.
+
+
+
+
 
 
 =item C<off>

@@ -96,6 +96,15 @@ allows access for all UNIX-domain sockets.
 
 
 
+Several C<allow> directives can be specified on the same level.
+These directives are inherited from the previous configuration level
+if and only if there are no C<allow> and
+C<deny> directives defined on the current level.
+
+
+
+
+
 
 
 =head2 deny
@@ -127,6 +136,15 @@ B<context:> I<limit_except>
 Denies access for the specified network or address.
 If the special value C<unix:> is specified (1.5.1),
 denies access for all UNIX-domain sockets.
+
+
+
+
+
+Several C<deny> directives can be specified on the same level.
+These directives are inherited from the previous configuration level
+if and only if there are no C<allow> and
+C<deny> directives defined on the current level.
 
 
 

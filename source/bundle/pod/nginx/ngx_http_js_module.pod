@@ -35,6 +35,9 @@ L<0.4.0|changes>.
 
     
     http {
+        # since 0.9.1
+        js_engine qjs;
+    
         js_import http.js;
     
         js_set $foo     http.foo;
@@ -335,6 +338,90 @@ since L<0.7.7|changes>.
 
 
 
+=head2 js_access
+
+
+B<syntax:> js_access I<I<C<module.function>>>
+
+
+
+B<context:> I<location>
+
+
+B<context:> I<if in location>
+
+
+B<context:> I<limit_except>
+
+
+
+This directive appeared in version 0.9.9.
+
+
+
+
+
+Sets an njs function as a handler in the
+L<access phase|development_guide>.
+Asynchronous operations such as
+L<r.subrequest()|reference>,
+L<ngx.fetch()|reference>,
+and L<setTimeout()|reference>
+are supported.
+
+
+
+
+
+A handler that returns without calling
+L<C<r.return()>|reference>
+or
+L<C<r.decline()>|reference>
+grants access.
+To deny access or send a custom response (for example, a redirect),
+the handler may call
+L<C<r.return()>|reference>.
+To make the handler express no opinion, deferring the decision to other
+access checkers under
+L<C<satisfy any>|ngx_http_core_module>,
+the handler may call
+L<C<r.decline()>|reference>.
+
+
+
+
+
+For example:
+
+    
+    example.conf:
+     location /protected/ {
+         js_access  main.auth;
+         proxy_pass http://upstream;
+     }
+    
+    example.js:
+     async function auth(r) {
+         let reply = await ngx.fetch('http://authsvc/check', {
+             headers: {Authorization: r.headersIn.Authorization}
+         });
+    
+         if (reply.status != 200) {
+             r.return(401);
+             return;
+         }
+     }
+    
+     export default {auth};
+
+
+
+
+
+
+
+
+
 =head2 js_content
 
 
@@ -442,6 +529,19 @@ Sets a L<JavaScript engine|engine>
 to be used for njs scripts.
 The C<njs> parameter sets the njs engine, also used by default.
 The C<qjs> parameter sets the QuickJS engine.
+
+
+
+
+
+
+B<NOTE>
+
+The C<njs> engine is deprecated
+since L<1.0.0|changes>;
+new configurations should use the C<qjs>
+(L<QuickJS|engine>) engine.
+
 
 
 
@@ -1070,6 +1170,28 @@ C<http.foo> is used to refer to it.
 
 
 Several C<js_import> directives can be specified.
+
+
+
+
+
+When C<js_import> is specified inside a
+L<ngx_http_core_module>,
+the imported modules are visible only if no JavaScript code
+has been invoked earlier in the request.
+A single VM is created per request when a
+L</js_set> variable is first accessed
+or when a L</js_content>, L</js_header_filter>,
+L</js_body_filter>, or L</js_access> handler
+is first invoked.
+The VM is cloned from the configuration scope active at that moment,
+and all subsequent JavaScript invocations within the request reuse it.
+Thus, if any of the above is referenced before the request is mapped
+to its final location, for example from a server-level
+L<ngx_http_rewrite_module>,
+the VM is bound to the import set of the outer scope, and modules
+imported in the matched C<location> will not be visible.
+To avoid this, declare such imports in a common parent scope.
 
 
 

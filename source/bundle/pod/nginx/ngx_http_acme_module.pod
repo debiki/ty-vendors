@@ -259,6 +259,49 @@ the module automatically selects the latest implemented version.
 
 
 
+=head2 common_name_in_csr
+
+
+B<syntax:> common_name_in_csr I<C<on> E<verbar> C<off>>
+
+
+B<default:> I<off>
+
+
+B<context:> I<acme_issuer>
+
+
+
+This directive appeared in version 0.4.0.
+
+
+
+
+
+If enabled, sets the Subject Common Name in the certificate request
+to the first DNS name or the first IP address provided.
+
+
+
+
+
+
+B<NOTE>
+
+Enabling this option may result in rejected certificate requests.
+
+
+B<NOTE>
+
+Prior to version 0.4.0, the Subject Common Name was always set.
+
+
+
+
+
+
+
+
 =head2 contact
 
 

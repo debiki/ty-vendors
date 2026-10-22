@@ -191,9 +191,8 @@ indicates that the variable is not cacheable (1.11.7).
 
 
 
-If the source value matches more than one of the specified variants,
-e.g. both a mask and a regular expression match, the first matching
-variant will be chosen, in the following order of priority:
+The search is performed in the following order of priority
+and terminates on the first matching variant:
 
 =over
 
@@ -202,34 +201,34 @@ variant will be chosen, in the following order of priority:
 
 =item 1.
 
-string value without a mask
+the string value without a mask
 
 
 
 =item 2.
 
-longest string value with a prefix mask,
+the longest string value with a prefix mask,
 e.g. “C<*.example.com>”
 
 
 
 =item 3.
 
-longest string value with a suffix mask,
+the longest string value with a suffix mask,
 e.g. “C<mail.*>”
 
 
 
 =item 4.
 
-first matching regular expression
-(in order of appearance in a configuration file)
+the first matching regular expression
+(in order of appearance in the configuration file)
 
 
 
 =item 5.
 
-default value
+the default value
 
 
 

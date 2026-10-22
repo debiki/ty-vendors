@@ -1005,6 +1005,19 @@ load balancing method.
 
 
 =item 
+C<--without-http_upstream_least_time_module>
+
+
+
+
+
+disables building a module that implements the
+L<ngx_http_upstream_module>
+load balancing method.
+
+
+
+=item 
 C<--without-http_upstream_random_module>
 
 
@@ -1040,6 +1053,19 @@ C<--without-http_upstream_zone_module>
 disables building a module that makes it possible to store run-time state
 of an upstream group in a shared memory
 L<ngx_http_upstream_module>.
+
+
+
+=item 
+C<--without-http_upstream_sticky_module>
+
+
+
+
+
+disables building a module that provides
+L<session
+affinity|ngx_http_upstream_module> to upstream servers.
 
 
 
@@ -1510,6 +1536,19 @@ and then closes the connection.
 
 
 =item 
+C<--without-stream_pass_module>
+
+
+
+
+
+disables building the
+L<ngx_stream_pass_module|ngx_stream_pass_module>
+module that passes accepted connections to other listening sockets.
+
+
+
+=item 
 C<--without-stream_set_module>
 
 
@@ -1537,6 +1576,19 @@ load balancing method.
 
 =item 
 C<--without-stream_upstream_least_conn_module>
+
+
+
+
+
+disables building a module that implements the
+L<ngx_stream_upstream_module>
+load balancing method.
+
+
+
+=item 
+C<--without-stream_upstream_least_time_module>
 
 
 

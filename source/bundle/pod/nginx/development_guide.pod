@@ -7051,6 +7051,7 @@ When the body is completely read, the C<post_handler> callback
 is called to continue processing the request.
 If the request body is missing or has already been read, the callback is called
 immediately.
+In unbuffered mode, the callback can be called before the whole body is read.
 The function
 C<ngx_http_read_client_request_body(r, post_handler)>
 allocates the C<request_body> request field of type
@@ -7212,14 +7213,16 @@ unbuffered mode of reading a request body.
 In this mode, after calling
 C<ngx_http_read_client_request_body()>, the
 C<bufs> chain might keep only a part of the body.
+The request flag C<reading_body> indicates that the request body
+reading is still in progress.
 To read the next part, call the
 C<ngx_http_read_unbuffered_request_body(r)> function.
-The return value C<NGX_AGAIN> and the request flag
-C<reading_body> indicate that more data is available.
-If C<bufs> is NULL after calling this function, there is
-nothing to read at the moment.
+The return value C<NGX_AGAIN> indicates that more body data
+or buffer space is needed.
+If C<bufs> is NULL after calling this function, no body data is
+available at the moment.
 The request callback C<read_event_handler> will be called when
-the next part of request body is available.
+more client body data is available.
 
 
 

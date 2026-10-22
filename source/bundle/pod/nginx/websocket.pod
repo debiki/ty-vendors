@@ -53,7 +53,7 @@ passed explicitly:
     
     location /chat/ {
         proxy_pass http://backend;
-        proxy_http_version 1.1;
+        # proxy_http_version 1.1; # before version 1.29.7
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
@@ -76,7 +76,7 @@ the C<Upgrade> field in the client request header:
     
             location /chat/ {
                 proxy_pass http://backend;
-                proxy_http_version 1.1;
+                # proxy_http_version 1.1; # before version 1.29.7
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection $connection_upgrade;
             }
