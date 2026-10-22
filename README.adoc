@@ -43,7 +43,9 @@ First, let's check if you have that key installed already:
   # Better idea — looking at the last 64 bits:
   gpg --list-keys 0xB550E09EA0E98066
 
-The full key id is apparently `25451EB088460026195BD62CB550E09EA0E98066`.
+The _full_key_id is apparently `25451EB088460026195BD62CB550E09EA0E98066`.
+
+Upd y2026: Now an AI says that exakt key is the full key.
 
 ##### Fetch key from keyserver
 
@@ -65,7 +67,7 @@ So don't do this:
   # Bad idea:
   # gpg --keyserver pgpkeys.mit.edu --keyserver-options timeout=10 --recv-key A0E98066
 
-Instead, specify 64 bits:
+Instead, specify 64 bits: (or the _full_key_id, see above)
 
   gpg --keyserver keyserver.ubuntu.com --keyserver-options timeout=10 --recv-key 0xB550E09EA0E98066
 
