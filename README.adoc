@@ -56,6 +56,7 @@ Git-remove the old packages, and Git-add the new:
 
 ----
 cd images/web/openresty-pkgs/
+sudo rm -fr ./usr-local-openresty-site  # in case of any root owned file
 git rm -fr ./usr-local-openresty-site
 mv ./new ./usr-local-openresty-site
 git add ./usr-local-openresty-site
