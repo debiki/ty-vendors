@@ -64,18 +64,18 @@ module lua-resty-lrucache-0.08
 # END lua-resty-lrucache
 # BEGIN lua-resty-openssl
 
-dist lua-resty-openssl-1.7.1
+dist lua-resty-openssl-1.8.0
   aliases resty.openssl
-  modules lua-resty-openssl-1.7.1
+  modules lua-resty-openssl-1.8.0
 
-module lua-resty-openssl-1.7.1
+module lua-resty-openssl-1.8.0
   aliases resty.openssl
-  section 18 544 lua-resty-openssl
-  section 544 684 description
-  section 684 713 status
-  section 713 1619 synopsis
-  section 1619 3073 copyright and license
-  section 3073 3871 see also
+  section 18 554 lua-resty-openssl
+  section 554 706 description
+  section 706 735 status
+  section 735 1626 synopsis
+  section 1626 3080 copyright and license
+  section 3080 3878 see also
 
 # END lua-resty-openssl
 # BEGIN luafilesystem

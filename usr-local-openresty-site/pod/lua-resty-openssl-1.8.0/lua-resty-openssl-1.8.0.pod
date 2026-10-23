@@ -4,7 +4,7 @@
 =head1 lua-resty-openssl
 
 
-FFI-based OpenSSL binding for LuaJIT, supporting OpenSSL 3.x, 1.1 series.
+FFI-based OpenSSL binding for LuaJIT, supporting OpenSSL 3, 4 and the 1.1.1 series.
 
 OpenSSL 1.1.0, 1.0.2 and BoringSSL support has been dropped, but are still available at the L<0.x branch|https://github.com/fffonion/lua-resty-openssl/tree/0.x>.
 
@@ -14,7 +14,7 @@ OpenSSL 1.1.0, 1.0.2 and BoringSSL support has been dropped, but are still avail
 =head1 Description
 
 C<lua-resty-openssl> is a FFI-based OpenSSL binding library, currently
-supports OpenSSL C<3.x> and C<1.1.1> series.
+supports OpenSSL C<3.x>, C<4.x> and the C<1.1.1> series.
 
 
 
@@ -26,16 +26,16 @@ Production.
 
 =head1 Synopsis
 
-This library is greatly inspired by L<luaossl|https://github.com/wahern/luaossl>, while uses the
+This library is greatly inspired by L<luaossl|https://github.com/wahern/luaossl>, and uses a
 naming conversion closer to original OpenSSL API.
-For example, a function called C<X509_set_pubkey> in OpenSSL C API will expect to exist
+For example, a function called C<X509_set_pubkey> in OpenSSL C API is exposed
 as C<resty.openssl.x509:set_pubkey>.
-I<CamelCase>s are replaced to I<underscore_case>s, for exmaple C<X509_set_serialNumber> becomes
+I<CamelCase>s are replaced to I<underscore_case>s, for example C<X509_set_serialNumber> becomes
 C<resty.openssl.x509:set_serial_number>. Another difference than C<luaossl> is that errors are never thrown
 using C<error()> but instead return as last parameter.
 
-Each Lua table returned by C<new()> contains a cdata object C<ctx>. User are not supposed to manully setting
-C<ffi.gc> or calling corresponding destructor of the C<ctx> struct (like C<*_free> functions).
+Each Lua table returned by C<new()> contains a cdata object C<ctx>. Users are not supposed to manually set
+C<ffi.gc> or call the corresponding destructor of the C<ctx> struct (like C<*_free> functions).
 
 
 

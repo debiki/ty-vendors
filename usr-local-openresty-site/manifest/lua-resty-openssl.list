@@ -77,4 +77,4 @@ lualib/resty/openssl/auxiliary/jwk.lua
 lualib/resty/openssl/auxiliary/bio.lua
 lualib/resty/openssl/auxiliary/ctypes.lua
 lualib/resty/openssl/auxiliary/ecdsa.lua
-pod/lua-resty-openssl-1.7.1/lua-resty-openssl-1.7.1.pod
+pod/lua-resty-openssl-1.8.0/lua-resty-openssl-1.8.0.pod
